@@ -62,13 +62,10 @@ export default function LoginPage() {
       }}>
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div style={{
-            width: 56, height: 56, borderRadius: 14,
-            background: 'linear-gradient(135deg, #d4a853, #b8862d)',
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 22, fontWeight: 700, color: '#1a1a1a',
+          <img src="/logo.jpg" alt="Retro Revival" style={{
+            width: 160, height: 160, borderRadius: 16, objectFit: 'cover',
             marginBottom: 16,
-          }}>RR</div>
+          }} />
           <h1 style={{
             fontFamily: "'Playfair Display', Georgia, serif",
             fontSize: 24, fontWeight: 700, color: '#d4a853', marginBottom: 4,
