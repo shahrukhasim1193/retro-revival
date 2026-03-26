@@ -1,7 +1,7 @@
 import './globals.css';
 
 export const metadata = {
-  title: 'Retro Revival — Inventory Manager',
+  title: 'Retro Revival — Business Manager',
   description: 'Inventory, dispatch & finance tracking for Retro Revival',
 };
 
