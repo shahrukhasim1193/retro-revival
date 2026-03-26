@@ -29,8 +29,8 @@
 
 body {
   font-family: var(--font-body);
-  background: var(--bg-primary);
-  color: var(--text-primary);
+  background: #F7F0E3;
+  color: #2A2A2A;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -40,14 +40,14 @@ input, select, button, textarea {
 }
 
 input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(0.7);
+  cursor: pointer;
 }
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #555; }
+::-webkit-scrollbar-thumb { background: #C4B9AB; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #A09686; }
 
 /* Animations */
 @keyframes fadeIn {
