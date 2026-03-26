@@ -161,7 +161,7 @@ export default function AppPage() {
       {/* Sidebar */}
       <aside style={{ width: sidebarOpen ? 240 : 64, background: '#161616', borderRight: '1px solid #2a2a2a', display: 'flex', flexDirection: 'column', transition: 'width 0.25s ease', flexShrink: 0, overflow: 'hidden' }}>
         <div style={{ padding: sidebarOpen ? '24px 20px' : '24px 12px', borderBottom: '1px solid #2a2a2a', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', minHeight: 72 }} onClick={() => setSidebarOpen(!sidebarOpen)}>
-          <div style={{ width: 36, height: 36, borderRadius: 8, background: 'linear-gradient(135deg, #d4a853, #b8862d)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, color: '#1a1a1a', flexShrink: 0 }}>RR</div>
+          <img src="/logo.jpg" alt="RR" style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
           {sidebarOpen && <div><div style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 16, color: '#d4a853', lineHeight: 1.2 }}>Retro Revival</div><div style={{ fontSize: 11, color: '#777', marginTop: 2 }}>Inventory Manager</div></div>}
         </div>
         <nav style={{ flex: 1, padding: '12px 8px' }}>
