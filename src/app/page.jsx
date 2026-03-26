@@ -121,7 +121,7 @@ function DashboardTab({categories,brands,qualities,procurements,dispatches,rate,
   const stock=getAvailableStock(procurements);const totalUnits=stock.reduce((s,i)=>s+i.totalQty,0);const totalValue=stock.reduce((s,i)=>s+i.totalCostVal,0);
   const gn=(list,id)=>list.find(i=>i.id===id)?.name||'—';
   return(<div>
-    <div style={{textAlign:'center',marginBottom:24}}><div style={{fontFamily:"'Noto Sans Arabic', serif",fontSize:28,color:T.accent,lineHeight:1.6,direction:'rtl'}}>{BISMILLAH}</div></div>
+    <div style={{textAlign:'center',marginBottom:24}}><div style={{fontFamily:"'Noto Sans Arabic', serif",fontSize:28,color:T.accent,lineHeight:1.6,direction:'rtl'}}>{BISMILLAH}</div><div style={{fontSize:12,color:T.textMuted,fontStyle:'italic',marginTop:4}}>In the name of Allah, the Most Gracious, the Most Merciful</div></div>
     <h1 style={{fontFamily:dsp,fontSize:28,fontWeight:700,color:T.accent,margin:'0 0 6px'}}>Dashboard</h1>
     <p style={{color:T.textSecondary,fontSize:14,margin:'0 0 20px'}}>Overview of your inventory and operations</p>
     <RizqQuote page="dashboard"/>
