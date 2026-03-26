@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase-browser';
 
 const CURRENCY_SYMBOLS = { GBP: '£', USD: '$', PKR: '₨' };
-const EXCHANGE_RATES = { GBP: 1, USD: 1.27, PKR: 354.50 };
+const FALLBACK_RATES = { GBP: 1, USD: 1.27, PKR: 354.50 };
 
 /* ===================== ICONS ===================== */
 const IconPackage = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16.5 9.4l-9-5.19M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 002 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>;
@@ -79,9 +79,32 @@ export default function AppPage() {
   const [procurements, setProcurements] = useState([]);
   const [dispatches, setDispatches] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [exchangeRates, setExchangeRates] = useState(FALLBACK_RATES);
+  const [ratesLive, setRatesLive] = useState(false);
 
-  const rate = EXCHANGE_RATES[currency];
+  const rate = exchangeRates[currency];
   const sym = CURRENCY_SYMBOLS[currency];
+
+  // Fetch live exchange rates
+  useEffect(() => {
+    async function fetchRates() {
+      try {
+        const res = await fetch('https://open.er-api.com/v6/latest/GBP');
+        const data = await res.json();
+        if (data.result === 'success' && data.rates) {
+          setExchangeRates({
+            GBP: 1,
+            USD: data.rates.USD || FALLBACK_RATES.USD,
+            PKR: data.rates.PKR || FALLBACK_RATES.PKR,
+          });
+          setRatesLive(true);
+        }
+      } catch (e) {
+        console.log('Using fallback exchange rates');
+      }
+    }
+    fetchRates();
+  }, []);
 
   // Load user and data
   useEffect(() => {
@@ -131,7 +154,7 @@ export default function AppPage() {
     { id: 'settings', label: 'Settings', icon: <IconSettings /> },
   ];
 
-  const sharedProps = { supabase, categories, brands, qualities, procurements, dispatches, loadAll, rate, sym, currency };
+  const sharedProps = { supabase, categories, brands, qualities, procurements, dispatches, loadAll, rate, sym, currency, exchangeRates };
 
   return (
     <div style={{ display: 'flex', height: '100vh', fontFamily: "var(--font-body)", background: '#111', color: '#e8e0d4', overflow: 'hidden' }}>
@@ -158,7 +181,8 @@ export default function AppPage() {
           {sidebarOpen && <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 11, color: '#555', marginBottom: 6 }}>Currency</div>
             <button onClick={() => { const order = ['GBP', 'USD', 'PKR']; setCurrency(order[(order.indexOf(currency) + 1) % 3]); }} style={{ background: 'rgba(212,168,83,0.15)', color: '#d4a853', border: '1px solid rgba(212,168,83,0.3)', borderRadius: 4, padding: '3px 10px', cursor: 'pointer', fontSize: 12, fontFamily: 'inherit', fontWeight: 600 }}>{currency} {sym}</button>
-            <div style={{ marginTop: 4, color: '#444', fontSize: 10 }}>£1 = ${EXCHANGE_RATES.USD} = ₨{EXCHANGE_RATES.PKR}</div>
+            <div style={{ marginTop: 4, color: '#444', fontSize: 10 }}>£1 = ${exchangeRates.USD.toFixed(2)} = ₨{exchangeRates.PKR.toFixed(0)}</div>
+            <div style={{ marginTop: 2, fontSize: 9, color: ratesLive ? '#4caf50' : '#777' }}>{ratesLive ? '● Live rates' : '○ Fallback rates'}</div>
           </div>}
           <button onClick={handleSignOut} style={{
             display: 'flex', alignItems: 'center', gap: 8, width: '100%',
@@ -603,7 +627,7 @@ function FinanceTab({ dispatches, rate, sym }) {
 }
 
 /* ===================== SETTINGS ===================== */
-function SettingsTab({ supabase, categories, brands, qualities, loadAll, currency }) {
+function SettingsTab({ supabase, categories, brands, qualities, loadAll, currency, exchangeRates }) {
   const [emails, setEmails] = useState([]);
   const [newEmail, setNewEmail] = useState('');
 
@@ -681,7 +705,7 @@ function SettingsTab({ supabase, categories, brands, qualities, loadAll, currenc
             }}>{CURRENCY_SYMBOLS[c]} {c}</div>
           ))}
         </div>
-        <div style={{ marginTop: 12, fontSize: 12, color: '#555' }}>Rates: £1 = ${EXCHANGE_RATES.USD} = ₨{EXCHANGE_RATES.PKR}</div>
+        <div style={{ marginTop: 12, fontSize: 12, color: '#555' }}>Rates: £1 = ${exchangeRates.USD.toFixed(2)} = ₨{exchangeRates.PKR.toFixed(0)}</div>
       </div>
 
       <div style={cardStyle}>
