@@ -58,3 +58,9 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .fade-in {
   animation: fadeIn 0.3s ease forwards;
 }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .grid-3 { grid-template-columns: 1fr !important; }
+  .grid-4 { grid-template-columns: 1fr 1fr !important; }
+}
