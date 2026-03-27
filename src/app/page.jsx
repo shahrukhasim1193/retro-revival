@@ -147,6 +147,7 @@ function ProcurementTab({supabase,user,categories,brands,qualities,procurements,
   const [form,setForm]=useState({category_id:'',brand_id:'',quality_id:'',totalPrice:'',quantity:'',date:new Date().toISOString().slice(0,10)});
   const [addingField,setAddingField]=useState(null);const [newOpt,setNewOpt]=useState('');const [saving,setSaving]=useState(false);
   const [editProc,setEditProc]=useState(null);
+  const [csvRows,setCsvRows]=useState(null);const [csvImporting,setCsvImporting]=useState(false);const [csvError,setCsvError]=useState('');
   const gn=(list,id)=>list.find(i=>i.id===id)?.name||'—';
   const unitPrice=form.totalPrice&&form.quantity&&parseInt(form.quantity)>0?(parseFloat(form.totalPrice)/parseInt(form.quantity)).toFixed(2):'';
 
@@ -155,6 +156,67 @@ function ProcurementTab({supabase,user,categories,brands,qualities,procurements,
   async function removeOpt(field,id){const table=field==='category'?'categories':field==='brand'?'brands':'quality_grades';await supabase.from(table).delete().eq('id',id);await loadAll();}
   async function delProc(id){if(!confirm('Delete this procurement record?'))return;await supabase.from('procurements').delete().eq('id',id);await loadAll();}
   async function saveEdit(){if(!editProc)return;setSaving(true);const qty=parseInt(editProc.quantity);const upGbp=parseFloat(editProc.unit_price_gbp)/rate;const dispatched=editProc._origQty-editProc._origRemaining;const newRemaining=Math.max(0,qty-dispatched);await supabase.from('procurements').update({category_id:editProc.category_id,brand_id:editProc.brand_id,quality_id:editProc.quality_id,unit_price_gbp:upGbp,quantity:qty,remaining_qty:newRemaining,procured_at:editProc.procured_at}).eq('id',editProc.id);setEditProc(null);await loadAll();setSaving(false);}
+
+  function parseCSV(text){
+    const lines=text.split(/\r?\n/).filter(l=>l.trim());if(lines.length<2){setCsvError('CSV must have a header row and at least one data row');return;}
+    const hdr=lines[0].split(',').map(h=>h.trim().toLowerCase().replace(/['"]/g,''));
+    const catIdx=hdr.findIndex(h=>h.includes('category')||h.includes('cat'));
+    const brIdx=hdr.findIndex(h=>h.includes('brand'));
+    const qIdx=hdr.findIndex(h=>h.includes('quality')||h.includes('qual')||h.includes('grade')||h.includes('condition'));
+    const qtyIdx=hdr.findIndex(h=>h.includes('quantity')||h.includes('qty'));
+    const ucIdx=hdr.findIndex(h=>h.includes('unit cost')||h.includes('unit price')||h.includes('unitcost')||h.includes('unitprice')||h.includes('unit_cost')||h.includes('unit_price'));
+    const tcIdx=hdr.findIndex(h=>h.includes('total cost')||h.includes('total price')||h.includes('totalcost')||h.includes('totalprice')||h.includes('total_cost')||h.includes('total_price'));
+    if(catIdx<0||brIdx<0||qIdx<0||qtyIdx<0){setCsvError('CSV must have columns: Category, Brand, Quality, Quantity, and either Unit Cost or Total Cost');return;}
+    if(ucIdx<0&&tcIdx<0){setCsvError('CSV must have either a Unit Cost or Total Cost column');return;}
+    const rows=[];
+    for(let i=1;i<lines.length;i++){
+      const vals=lines[i].match(/("([^"]*)"|[^,]*)/g)?.map(v=>v.replace(/^"|"$/g,'').trim())||[];
+      if(vals.length<=Math.max(catIdx,brIdx,qIdx,qtyIdx)){continue;}
+      const qty=parseInt(vals[qtyIdx]);if(!qty||qty<=0)continue;
+      let unitCost=0;
+      if(ucIdx>=0&&vals[ucIdx]){unitCost=parseFloat(vals[ucIdx].replace(/[^0-9.-]/g,''))||0;}
+      else if(tcIdx>=0&&vals[tcIdx]){const tc=parseFloat(vals[tcIdx].replace(/[^0-9.-]/g,''))||0;unitCost=tc/qty;}
+      if(unitCost<=0)continue;
+      rows.push({category:vals[catIdx],brand:vals[brIdx],quality:vals[qIdx],quantity:qty,unitCost,row:i+1});
+    }
+    if(!rows.length){setCsvError('No valid data rows found. Check your CSV format.');return;}
+    setCsvError('');setCsvRows(rows);
+  }
+
+  function handleCsvFile(e){
+    const file=e.target.files?.[0];if(!file)return;setCsvError('');setCsvRows(null);
+    const reader=new FileReader();reader.onload=ev=>{parseCSV(ev.target.result);};reader.readAsText(file);e.target.value='';
+  }
+
+  async function importCsv(){
+    if(!csvRows?.length)return;setCsvImporting(true);
+    const uName=user?.user_metadata?.full_name||user?.email||'';
+    const today=new Date().toISOString().slice(0,10);
+    // Collect unique new values
+    const existCats=new Set(categories.map(c=>c.name.toLowerCase()));
+    const existBrands=new Set(brands.map(b=>b.name.toLowerCase()));
+    const existQuals=new Set(qualities.map(q=>q.name.toLowerCase()));
+    const newCats=[...new Set(csvRows.map(r=>r.category).filter(c=>!existCats.has(c.toLowerCase())))];
+    const newBrands=[...new Set(csvRows.map(r=>r.brand).filter(b=>!existBrands.has(b.toLowerCase())))];
+    const newQuals=[...new Set(csvRows.map(r=>r.quality).filter(q=>!existQuals.has(q.toLowerCase())))];
+    // Insert new dropdown values
+    if(newCats.length)await supabase.from('categories').insert(newCats.map(n=>({name:n})));
+    if(newBrands.length)await supabase.from('brands').insert(newBrands.map(n=>({name:n})));
+    if(newQuals.length)await supabase.from('quality_grades').insert(newQuals.map(n=>({name:n})));
+    // Reload to get IDs
+    const[rc,rb,rq]=await Promise.all([supabase.from('categories').select('*'),supabase.from('brands').select('*'),supabase.from('quality_grades').select('*')]);
+    const allCats=rc.data||[];const allBrands=rb.data||[];const allQuals=rq.data||[];
+    // Build procurement inserts
+    const inserts=csvRows.map(r=>{
+      const catId=allCats.find(c=>c.name.toLowerCase()===r.category.toLowerCase())?.id;
+      const brId=allBrands.find(b=>b.name.toLowerCase()===r.brand.toLowerCase())?.id;
+      const qId=allQuals.find(q=>q.name.toLowerCase()===r.quality.toLowerCase())?.id;
+      if(!catId||!brId||!qId)return null;
+      return{category_id:catId,brand_id:brId,quality_id:qId,unit_price_gbp:r.unitCost/rate,quantity:r.quantity,remaining_qty:r.quantity,procured_at:today,logged_by_name:uName};
+    }).filter(Boolean);
+    if(inserts.length)await supabase.from('procurements').insert(inserts);
+    setCsvRows(null);setCsvImporting(false);await loadAll();
+  }
 
   function DD({label,field,options,value,onChange}){
     const isA=addingField===field;const empty=options.length===0;
@@ -180,6 +242,29 @@ function ProcurementTab({supabase,user,categories,brands,qualities,procurements,
       </div>
       <button type="submit" disabled={saving} style={{...btnP,opacity:saving?0.6:1}}>{saving?'Saving...':'Record Procurement'}</button>
     </form>
+
+    {/* CSV Upload */}
+    <div style={{...crd,padding:24,marginBottom:32}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:csvRows?16:0}}>
+        <div>
+          <h3 style={{fontFamily:dsp,fontSize:16,color:T.accent,margin:'0 0 4px'}}>Bulk Import via CSV</h3>
+          <p style={{color:T.textSecondary,fontSize:12,margin:0}}>Columns: Category, Brand, Quality, Quantity, Unit Cost (or Total Cost)</p>
+        </div>
+        <label style={{...btnS,padding:'8px 16px',display:'flex',alignItems:'center',gap:6,cursor:'pointer'}}><IconPlus/> Upload CSV<input type="file" accept=".csv,.txt" onChange={handleCsvFile} style={{display:'none'}}/></label>
+      </div>
+      {csvError&&<div style={{background:'rgba(179,58,58,0.08)',border:'1px solid rgba(179,58,58,0.3)',borderRadius:8,padding:'10px 14px',marginTop:12,color:T.red,fontSize:13}}>{csvError}</div>}
+      {csvRows&&<div style={{marginTop:12}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+          <div style={{fontSize:14,fontWeight:600,color:T.text}}>{csvRows.length} rows ready to import</div>
+          <div style={{display:'flex',gap:8}}>
+            <button onClick={()=>setCsvRows(null)} style={{background:'rgba(179,58,58,0.08)',color:T.red,border:'1px solid rgba(179,58,58,0.2)',borderRadius:6,padding:'8px 16px',cursor:'pointer',fontWeight:600,fontFamily:'inherit',fontSize:12}}>Cancel</button>
+            <button onClick={importCsv} disabled={csvImporting} style={{...btnP,padding:'8px 20px',fontSize:13,opacity:csvImporting?0.6:1}}>{csvImporting?'Importing...':'Confirm Import'}</button>
+          </div>
+        </div>
+        {(()=>{const newCats=[...new Set(csvRows.map(r=>r.category).filter(c=>!categories.find(x=>x.name.toLowerCase()===c.toLowerCase())))];const newBr=[...new Set(csvRows.map(r=>r.brand).filter(b=>!brands.find(x=>x.name.toLowerCase()===b.toLowerCase())))];const newQ=[...new Set(csvRows.map(r=>r.quality).filter(q=>!qualities.find(x=>x.name.toLowerCase()===q.toLowerCase())))];const hasNew=newCats.length||newBr.length||newQ.length;return hasNew?<div style={{background:'rgba(107,127,94,0.06)',border:`1px solid ${T.accentBorder}`,borderRadius:8,padding:'10px 14px',marginBottom:12,fontSize:13,color:T.accent}}>New values will be auto-created: {newCats.length>0&&<span><strong>{newCats.length} categories</strong> ({newCats.join(', ')}) </span>}{newBr.length>0&&<span><strong>{newBr.length} brands</strong> ({newBr.join(', ')}) </span>}{newQ.length>0&&<span><strong>{newQ.length} quality grades</strong> ({newQ.join(', ')})</span>}</div>:null;})()}
+        <div style={{overflowX:'auto',border:`1px solid ${T.border}`,borderRadius:8}}><table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}><thead><tr style={{borderBottom:`1px solid ${T.border}`,background:T.bg}}>{['#','Category','Brand','Quality','Qty','Unit Cost'].map(h=><th key={h} style={{..._th,fontSize:10,padding:'8px 12px'}}>{h}</th>)}</tr></thead><tbody>{csvRows.slice(0,50).map((r,i)=><tr key={i} style={{borderBottom:`1px solid ${T.borderLight}`}}><td style={{padding:'6px 12px',color:T.textMuted}}>{i+1}</td><td style={{padding:'6px 12px'}}>{r.category}</td><td style={{padding:'6px 12px'}}>{r.brand}</td><td style={{padding:'6px 12px'}}>{r.quality}</td><td style={{padding:'6px 12px'}}>{r.quantity}</td><td style={{padding:'6px 12px',fontFamily:mono}}>{sym}{r.unitCost.toFixed(2)}</td></tr>)}</tbody></table>{csvRows.length>50&&<div style={{padding:'8px 12px',textAlign:'center',color:T.textMuted,fontSize:12}}>...and {csvRows.length-50} more rows</div>}</div>
+      </div>}
+    </div>
     {sorted.length>0&&<div style={{...crd,padding:0,overflow:'hidden'}}><h3 style={{fontFamily:dsp,fontSize:16,color:T.accent,padding:'16px 20px 0',margin:0}}>History</h3><div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontSize:13,marginTop:12}}><thead><tr style={{borderBottom:`1px solid ${T.border}`}}>{['Date','Category','Brand','Quality','Unit Price','Qty','Remaining','By',''].map(h=><th key={h} style={_th}>{h}</th>)}</tr></thead><tbody>{sorted.map(p=><tr key={p.id} style={{borderBottom:`1px solid ${T.borderLight}`}}><td style={{..._td,color:T.textSecondary}}>{new Date(p.procured_at).toLocaleDateString('en-GB')}</td><td style={_td}>{gn(categories,p.category_id)}</td><td style={_td}>{gn(brands,p.brand_id)}</td><td style={_td}><span style={{background:T.accentBg,color:T.accent,padding:'2px 8px',borderRadius:4,fontSize:11}}>{gn(qualities,p.quality_id)}</span></td><td style={{..._td,fontFamily:mono}}>{sym}{(parseFloat(p.unit_price_gbp)*rate).toFixed(2)}</td><td style={_td}>{p.quantity}</td><td style={{..._td,fontWeight:600,color:p.remaining_qty===0?T.textFaint:T.green}}>{p.remaining_qty}</td><td style={{..._td,fontSize:11,color:T.textMuted}}>{p.logged_by_name||'—'}</td><td style={{..._td,display:'flex',gap:6}}><button onClick={()=>setEditProc({...p,unit_price_gbp:''+(parseFloat(p.unit_price_gbp)*rate).toFixed(2),_origQty:p.quantity,_origRemaining:p.remaining_qty})} style={{background:'none',border:'none',color:T.accent,cursor:'pointer',opacity:0.6,padding:4}}><IconEdit/></button><button onClick={()=>delProc(p.id)} style={{background:'none',border:'none',color:T.red,cursor:'pointer',opacity:0.5,padding:4}}><IconTrash/></button></td></tr>)}</tbody></table></div></div>}
     <Modal open={!!editProc} onClose={()=>setEditProc(null)} title="Edit Procurement">
       {editProc&&<div><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))',gap:16,marginBottom:16}}><div><label style={lbl}>Category</label><select value={editProc.category_id} onChange={e=>setEditProc({...editProc,category_id:e.target.value})} style={sel}>{categories.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select></div><div><label style={lbl}>Brand</label><select value={editProc.brand_id} onChange={e=>setEditProc({...editProc,brand_id:e.target.value})} style={sel}>{brands.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select></div></div><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))',gap:16,marginBottom:16}}><div><label style={lbl}>Quality</label><select value={editProc.quality_id} onChange={e=>setEditProc({...editProc,quality_id:e.target.value})} style={sel}>{qualities.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select></div><div><label style={lbl}>Unit Price ({sym})</label><input type="number" step="0.01" value={editProc.unit_price_gbp} onChange={e=>setEditProc({...editProc,unit_price_gbp:e.target.value})} style={inp}/></div><div><label style={lbl}>Quantity</label><input type="number" min="1" value={editProc.quantity} onChange={e=>setEditProc({...editProc,quantity:e.target.value})} style={inp}/></div></div><div style={{marginBottom:20}}><label style={lbl}>Date</label><input type="date" value={editProc.procured_at} onChange={e=>setEditProc({...editProc,procured_at:e.target.value})} style={inp}/></div>{editProc._origQty!==editProc._origRemaining&&<div style={{background:'rgba(212,168,83,0.1)',border:'1px solid rgba(212,168,83,0.3)',borderRadius:8,padding:'10px 14px',marginBottom:16,color:T.textSecondary,fontSize:13}}>{editProc._origQty-editProc._origRemaining} units already dispatched</div>}<button onClick={saveEdit} style={btnP}>Save Changes</button></div>}
