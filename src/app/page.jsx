@@ -127,17 +127,76 @@ export default function AppPage(){
 }
 
 /* ===== DASHBOARD ===== */
-function DashboardTab({categories,brands,qualities,procurements,dispatches,rate,sym}){
+function DashboardTab({categories,brands,qualities,procurements,dispatches,expenses,rate,sym}){
   const stock=getAvailableStock(procurements);const totalUnits=stock.reduce((s,i)=>s+i.totalQty,0);const totalValue=stock.reduce((s,i)=>s+i.totalCostVal,0);
   const gn=(list,id)=>list.find(i=>i.id===id)?.name||'—';
+
+  // Historical GMV data (billing periods before app went live)
+  const historicalGMV=[
+    {label:'Jan',gmv:6170},
+    {label:'Feb',gmv:5672},
+  ];
+
+  // Calculate current + past period GMVs from dispatch data
+  const periods=getBillingPeriods(dispatches,expenses);
+  const periodGMVs=periods.map(p=>{
+    const pDisp=dispatches.filter(d=>{const dt=new Date(d.dispatched_at);return dt>=p.start&&dt<=p.end;});
+    const gmv=pDisp.reduce((s,d)=>s+(parseFloat(d.selling_price_gbp)||0),0);
+    const ship=pDisp.reduce((s,d)=>s+(parseFloat(d.shipping_cost_gbp)||0),0);
+    const comm=pDisp.reduce((s,d)=>{const r=parseFloat(d.selling_price_gbp)||0;const sh=parseFloat(d.shipping_cost_gbp)||0;const pc=parseFloat(d.commission_pct)||0;return s+Math.max(0,r-sh)*pc/100;},0);
+    const cogs=pDisp.reduce((s,d)=>s+(d.dispatch_items||[]).reduce((ss,it)=>ss+it.quantity*parseFloat(it.unit_cost_gbp),0),0);
+    const fExp=(expenses||[]).filter(e=>{const dt=new Date(e.expense_date);return dt>=p.start&&dt<=p.end;});
+    const revDed=fExp.filter(e=>e.category==='Revenue Deductions').reduce((s,e)=>s+parseFloat(e.amount_gbp),0);
+    const startMonth=p.start.toLocaleDateString('en-GB',{month:'short'});
+    return{label:startMonth,gmv,netRev:gmv-ship-comm-revDed-cogs};
+  });
+
+  // Merge historical + live data (skip live periods that overlap with historical labels)
+  const historicalLabels=new Set(historicalGMV.map(h=>h.label));
+  const liveOnly=periodGMVs.filter(p=>!historicalLabels.has(p.label));
+  const allPeriods=[...historicalGMV.map(h=>({...h,netRev:0,isHistorical:true})),...liveOnly.map(p=>({...p,isHistorical:false}))];
+
+  // Current period (last one)
+  const currentP=periodGMVs.length>0?periodGMVs[periodGMVs.length-1]:null;
+  const currentGMV=currentP?currentP.gmv:0;
+  const currentNetRev=currentP?currentP.netRev:0;
+
+  // Chart dimensions
+  const maxGMV=Math.max(...allPeriods.map(p=>p.gmv),1);
+  const chartH=200;const barW=56;const gap=16;const chartW=Math.max(allPeriods.length*(barW+gap),300);
+
   return(<div>
     <div style={{textAlign:'center',marginBottom:24}}><div style={{fontFamily:"'Noto Sans Arabic', serif",fontSize:28,color:T.accent,lineHeight:1.6,direction:'rtl'}}>{BISMILLAH}</div><div style={{fontSize:12,color:T.textMuted,fontStyle:'italic',marginTop:4}}>In the name of Allah, the Most Gracious, the Most Merciful</div></div>
     <h1 style={{fontFamily:dsp,fontSize:28,fontWeight:700,color:T.accent,margin:'0 0 6px'}}>Dashboard</h1>
     <p style={{color:T.textSecondary,fontSize:14,margin:'0 0 20px'}}>Overview of your inventory and operations</p>
     <RizqQuote page="dashboard"/>
     <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))',gap:16,marginBottom:32}}>
-      {[{l:'Total SKUs',v:stock.length,s:`${totalUnits} units`},{l:'Inventory Value',v:`${sym}${(totalValue*rate).toFixed(0)}`,s:'AVCO cost basis'},{l:'Dispatches',v:dispatches.length,s:'all time'},{l:'Procurements',v:procurements.length,s:'recorded'}].map((c,i)=><div key={i} style={crd}><div style={{fontSize:12,color:T.textSecondary,textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>{c.l}</div><div style={{fontSize:28,fontWeight:700,fontFamily:dsp,color:T.text}}>{c.v}</div><div style={{fontSize:12,color:T.textMuted,marginTop:4}}>{c.s}</div></div>)}
+      {[
+        {l:'Current Period GMV',v:`${sym}${(currentGMV*rate).toFixed(0)}`,s:currentP?currentP.label+' period':'no dispatches yet',color:T.accent},
+        {l:'Current Net Revenue',v:`${sym}${(currentNetRev*rate).toFixed(0)}`,s:'after deductions & COGS',color:currentNetRev>=0?T.green:T.red},
+        {l:'Inventory Value',v:`${sym}${(totalValue*rate).toFixed(0)}`,s:`${totalUnits} units · AVCO basis`},
+        {l:'Dispatches',v:dispatches.length,s:'all time'},
+      ].map((c,i)=><div key={i} style={crd}><div style={{fontSize:12,color:T.textSecondary,textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>{c.l}</div><div style={{fontSize:28,fontWeight:700,fontFamily:dsp,color:c.color||T.text}}>{c.v}</div><div style={{fontSize:12,color:T.textMuted,marginTop:4}}>{c.s}</div></div>)}
     </div>
+
+    {allPeriods.length>0&&<div style={{...crd,marginBottom:32}}>
+      <h2 style={{fontFamily:dsp,fontSize:18,color:T.accent,margin:'0 0 20px'}}>GMV by Period</h2>
+      <div style={{overflowX:'auto'}}>
+        <div style={{display:'flex',alignItems:'flex-end',gap:gap,minWidth:chartW,height:chartH+50,paddingBottom:30,position:'relative'}}>
+          {allPeriods.map((p,i)=>{const h=maxGMV>0?(p.gmv/maxGMV)*chartH:0;const isCurrent=i===allPeriods.length-1&&!p.isHistorical;return(
+            <div key={i} style={{display:'flex',flexDirection:'column',alignItems:'center',flex:1,minWidth:barW}}>
+              <div style={{fontSize:11,fontFamily:mono,color:T.textSecondary,marginBottom:4}}>{sym}{(p.gmv*rate).toFixed(0)}</div>
+              <div style={{width:barW,height:h,background:isCurrent?`linear-gradient(180deg, ${T.accent}, ${T.accentDark})`:p.isHistorical?'linear-gradient(180deg, #B8A88A, #A09686)':`linear-gradient(180deg, ${T.accent}cc, ${T.accent}88)`,borderRadius:'6px 6px 0 0',transition:'height 0.5s ease',position:'relative'}}>
+                {isCurrent&&<div style={{position:'absolute',top:-8,left:'50%',transform:'translateX(-50)',width:8,height:8,borderRadius:'50%',background:T.accent}}/>}
+              </div>
+              <div style={{fontSize:12,color:isCurrent?T.accent:T.textMuted,fontWeight:isCurrent?700:500,marginTop:8}}>{p.label}</div>
+              {isCurrent&&<div style={{fontSize:9,color:T.accent,textTransform:'uppercase',letterSpacing:0.5}}>current</div>}
+            </div>
+          );})}
+        </div>
+      </div>
+    </div>}
+
     {stock.length>0&&<><h2 style={{fontFamily:dsp,fontSize:18,color:T.accent,margin:'0 0 12px'}}>Current Stock</h2><div style={{...crd,padding:0,overflow:'hidden'}}><table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}><thead><tr style={{borderBottom:`1px solid ${T.border}`}}>{['Category','Brand','Quality','Qty','Avg Cost'].map(h=><th key={h} style={_th}>{h}</th>)}</tr></thead><tbody>{stock.map((s,i)=><tr key={i} style={{borderBottom:`1px solid ${T.borderLight}`}}><td style={_td}>{gn(categories,s.category_id)}</td><td style={_td}>{gn(brands,s.brand_id)}</td><td style={_td}><span style={{background:T.accentBg,color:T.accent,padding:'2px 8px',borderRadius:4,fontSize:11}}>{gn(qualities,s.quality_id)}</span></td><td style={{..._td,fontWeight:600}}>{s.totalQty}</td><td style={{..._td,fontFamily:mono}}>{sym}{(s.avgCost*rate).toFixed(2)}</td></tr>)}</tbody></table></div></>}
   </div>);
 }
