@@ -170,7 +170,7 @@ function ProcurementTab({supabase,user,categories,brands,qualities,procurements,
     if(ucIdx<0&&tcIdx<0){setCsvError('CSV must have either a Unit Cost or Total Cost column');return;}
     const rows=[];
     for(let i=1;i<lines.length;i++){
-      const vals=lines[i].match(/("([^"]*)"|[^,]*)/g)?.map(v=>v.replace(/^"|"$/g,'').trim())||[];
+      const vals=lines[i].split(',').map(v=>v.replace(/^[\s"']+|[\s"']+$/g,''));
       if(vals.length<=Math.max(catIdx,brIdx,qIdx,qtyIdx)){continue;}
       const qty=parseInt(vals[qtyIdx]);if(!qty||qty<=0)continue;
       let unitCost=0;
