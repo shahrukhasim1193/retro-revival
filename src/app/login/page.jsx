@@ -29,7 +29,7 @@ export default function LoginPage() {
         if (error) throw error;
         await supabase.from('signup_requests').insert({ email: email.toLowerCase(), full_name: name });
         setMsgType('success');
-        setMessage('Account created! An admin needs to approve your access before you can sign in. Please contact your team lead.');
+        setMessage('Account created! An admin needs to approve your access before you can sign in. Please contact Don Shark.');
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
