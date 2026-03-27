@@ -161,9 +161,13 @@ function DashboardTab({categories,brands,qualities,procurements,dispatches,expen
   const currentGMV=currentP?currentP.gmv:0;
   const currentNetRev=currentP?currentP.netRev:0;
 
-  // Chart dimensions
+  // Sparkline dimensions
+  const svgW=600;const svgH=180;const padL=50;const padR=30;const padT=30;const padB=40;
   const maxGMV=Math.max(...allPeriods.map(p=>p.gmv),1);
-  const chartH=200;const barW=56;const gap=16;const chartW=Math.max(allPeriods.length*(barW+gap),300);
+  const plotW=svgW-padL-padR;const plotH=svgH-padT-padB;
+  const pts=allPeriods.map((p,i)=>{const x=padL+(allPeriods.length>1?(i/(allPeriods.length-1))*plotW:plotW/2);const y=padT+plotH-(p.gmv/maxGMV)*plotH;return{x,y,...p};});
+  const linePath=pts.map((p,i)=>`${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  const areaPath=linePath+` L${pts[pts.length-1].x.toFixed(1)},${padT+plotH} L${pts[0].x.toFixed(1)},${padT+plotH} Z`;
 
   return(<div>
     <div style={{textAlign:'center',marginBottom:24}}><div style={{fontFamily:"'Noto Sans Arabic', serif",fontSize:28,color:T.accent,lineHeight:1.6,direction:'rtl'}}>{BISMILLAH}</div><div style={{fontSize:12,color:T.textMuted,fontStyle:'italic',marginTop:4}}>In the name of Allah, the Most Gracious, the Most Merciful</div></div>
@@ -180,20 +184,29 @@ function DashboardTab({categories,brands,qualities,procurements,dispatches,expen
     </div>
 
     {allPeriods.length>0&&<div style={{...crd,marginBottom:32}}>
-      <h2 style={{fontFamily:dsp,fontSize:18,color:T.accent,margin:'0 0 20px'}}>GMV by Period</h2>
+      <h2 style={{fontFamily:dsp,fontSize:18,color:T.accent,margin:'0 0 12px'}}>GMV Trend</h2>
       <div style={{overflowX:'auto'}}>
-        <div style={{display:'flex',alignItems:'flex-end',gap:gap,minWidth:chartW,height:chartH+50,paddingBottom:30,position:'relative'}}>
-          {allPeriods.map((p,i)=>{const h=maxGMV>0?(p.gmv/maxGMV)*chartH:0;const isCurrent=i===allPeriods.length-1&&!p.isHistorical;return(
-            <div key={i} style={{display:'flex',flexDirection:'column',alignItems:'center',flex:1,minWidth:barW}}>
-              <div style={{fontSize:11,fontFamily:mono,color:T.textSecondary,marginBottom:4}}>{sym}{(p.gmv*rate).toFixed(0)}</div>
-              <div style={{width:barW,height:h,background:isCurrent?`linear-gradient(180deg, ${T.accent}, ${T.accentDark})`:p.isHistorical?'linear-gradient(180deg, #B8A88A, #A09686)':`linear-gradient(180deg, ${T.accent}cc, ${T.accent}88)`,borderRadius:'6px 6px 0 0',transition:'height 0.5s ease',position:'relative'}}>
-                {isCurrent&&<div style={{position:'absolute',top:-8,left:'50%',transform:'translateX(-50)',width:8,height:8,borderRadius:'50%',background:T.accent}}/>}
-              </div>
-              <div style={{fontSize:12,color:isCurrent?T.accent:T.textMuted,fontWeight:isCurrent?700:500,marginTop:8}}>{p.label}</div>
-              {isCurrent&&<div style={{fontSize:9,color:T.accent,textTransform:'uppercase',letterSpacing:0.5}}>current</div>}
-            </div>
-          );})}
-        </div>
+        <svg viewBox={`0 0 ${svgW} ${svgH}`} style={{width:'100%',maxWidth:svgW,height:'auto'}}>
+          <defs>
+            <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={T.accent} stopOpacity="0.25"/>
+              <stop offset="100%" stopColor={T.accent} stopOpacity="0.02"/>
+            </linearGradient>
+          </defs>
+          {/* Grid lines */}
+          {[0,0.25,0.5,0.75,1].map((pct,i)=>{const y=padT+plotH-pct*plotH;const val=maxGMV*pct;return<g key={i}><line x1={padL} y1={y} x2={svgW-padR} y2={y} stroke={T.borderLight} strokeWidth="1" strokeDasharray={i===0?"0":"4,4"}/><text x={padL-8} y={y+4} textAnchor="end" fill={T.textMuted} fontSize="10" fontFamily="var(--font-mono)">{sym}{(val*rate).toFixed(0)}</text></g>;})}
+          {/* Area fill */}
+          <path d={areaPath} fill="url(#areaGrad)"/>
+          {/* Line */}
+          <path d={linePath} fill="none" stroke={T.accent} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+          {/* Dots and labels */}
+          {pts.map((p,i)=>{const isCurrent=i===pts.length-1&&!p.isHistorical;return<g key={i}>
+            <circle cx={p.x} cy={p.y} r={isCurrent?6:4} fill={isCurrent?T.accent:T.bgCard} stroke={T.accent} strokeWidth="2"/>
+            {isCurrent&&<circle cx={p.x} cy={p.y} r={10} fill="none" stroke={T.accent} strokeWidth="1" strokeOpacity="0.3"/>}
+            <text x={p.x} y={padT+plotH+16} textAnchor="middle" fill={isCurrent?T.accent:T.textMuted} fontSize={isCurrent?"12":"11"} fontWeight={isCurrent?"700":"400"} fontFamily="var(--font-body)">{p.label}</text>
+            <text x={p.x} y={p.y-12} textAnchor="middle" fill={T.textSecondary} fontSize="10" fontFamily="var(--font-mono)">{sym}{(p.gmv*rate).toFixed(0)}</text>
+          </g>;})}
+        </svg>
       </div>
     </div>}
 
