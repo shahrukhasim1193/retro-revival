@@ -412,6 +412,7 @@ function FinanceTab({supabase,dispatches,expenses,salesChannels,categories,brand
   function Row({label,val,bold,indent,highlight,separator}){if(separator)return<tr><td colSpan={2} style={{padding:'6px 16px',borderBottom:`2px solid ${T.border}`}}></td></tr>;const v=val*rate;const neg=v<0;return<tr style={{borderBottom:`1px solid ${bold?T.border:T.borderLight}`}}><td style={{..._td,fontWeight:bold?700:400,paddingLeft:indent?32:16,color:highlight||T.text}}>{label}</td><td style={{..._td,fontFamily:mono,fontWeight:bold?700:400,textAlign:'right',color:highlight||(neg?T.red:T.text)}}>{neg?`(${sym}${Math.abs(v).toFixed(2)})`:`${sym}${v.toFixed(2)}`}</td></tr>;}
 
   const [pdfParsing,setPdfParsing]=useState(false);const [pdfResult,setPdfResult]=useState(null);const [pdfError,setPdfError]=useState('');const [pdfApplying,setPdfApplying]=useState(false);
+  const [viewOrder,setViewOrder]=useState(null);
   const gn=(list,id)=>list.find(i=>i.id===id)?.name||'—';
 
   async function loadPdfJs(){if(window.pdfjsLib)return window.pdfjsLib;return new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';s.onload=()=>{window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';resolve(window.pdfjsLib);};s.onerror=()=>reject(new Error('Failed to load PDF.js'));document.head.appendChild(s);});}
@@ -475,7 +476,7 @@ function FinanceTab({supabase,dispatches,expenses,salesChannels,categories,brand
       const itemDesc=(d.dispatch_items||[]).map(it=>`${gn(categories,it.category_id)}/${gn(brands,it.brand_id)} x${it.quantity}`).join(', ');
       return<tr key={d.id} style={{borderBottom:`1px solid ${T.borderLight}`}}>
         <td style={{..._td,color:T.textSecondary,fontSize:11}}>{new Date(d.dispatched_at).toLocaleDateString('en-GB')}</td>
-        <td style={{..._td,fontFamily:mono,color:T.accent,fontSize:11}}>{d.order_id}</td>
+        <td style={{..._td,fontFamily:mono,fontSize:11}}><button onClick={()=>setViewOrder(d)} style={{background:'none',border:'none',color:T.accent,cursor:'pointer',fontFamily:mono,fontSize:11,padding:0,textDecoration:'underline',fontWeight:600}}>{d.order_id}</button></td>
         <td style={{..._td,fontSize:11}}>{d.sales_channel_id?gn(salesChannels,d.sales_channel_id):'—'}</td>
         <td style={{..._td,fontSize:10,color:T.textSecondary,maxWidth:150,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{itemDesc||'—'}</td>
         <td style={{..._td,fontFamily:mono}}>{sym}{(rev*rate).toFixed(2)}</td>
@@ -488,6 +489,29 @@ function FinanceTab({supabase,dispatches,expenses,salesChannels,categories,brand
       </tr>;}):
       <tr><td colSpan={11} style={{..._td,textAlign:'center',color:T.textMuted,padding:30}}>No dispatches in this period</td></tr>}
     </tbody></table></div></div>}
+
+    <Modal open={!!viewOrder} onClose={()=>setViewOrder(null)} title={viewOrder?`Order ${viewOrder.order_id}`:''}>
+      {viewOrder&&(()=>{const rev=parseFloat(viewOrder.selling_price_gbp)||0;const ship=parseFloat(viewOrder.shipping_cost_gbp)||0;const comm=parseFloat(viewOrder.commission_pct)||0;const commBase2=Math.max(0,rev-ship);const commAmt2=commBase2*comm/100;const its=viewOrder.dispatch_items||[];const orderCogs=its.reduce((s2,it)=>s2+it.quantity*parseFloat(it.unit_cost_gbp),0);const refund=parseFloat(viewOrder.refund_amount_gbp||0);const net=rev-ship-commAmt2-orderCogs-refund;const margin=rev?(net/rev*100):0;return<div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(150px, 1fr))',gap:12,marginBottom:20}}>
+          <div style={{background:T.bg,borderRadius:8,padding:'10px 14px'}}><div style={{fontSize:11,color:T.textMuted,textTransform:'uppercase',marginBottom:4}}>Date</div><div style={{fontWeight:600}}>{new Date(viewOrder.dispatched_at).toLocaleDateString('en-GB')}</div></div>
+          <div style={{background:T.bg,borderRadius:8,padding:'10px 14px'}}><div style={{fontSize:11,color:T.textMuted,textTransform:'uppercase',marginBottom:4}}>Channel</div><div style={{fontWeight:600}}>{viewOrder.sales_channel_id?gn(salesChannels,viewOrder.sales_channel_id):'—'}</div></div>
+          <div style={{background:T.bg,borderRadius:8,padding:'10px 14px'}}><div style={{fontSize:11,color:T.textMuted,textTransform:'uppercase',marginBottom:4}}>Status</div><div style={{fontWeight:600,color:(viewOrder.payment_status||'Pending')==='Paid'?T.green:T.textMuted}}>{viewOrder.payment_status||'Pending'}</div></div>
+          <div style={{background:T.bg,borderRadius:8,padding:'10px 14px'}}><div style={{fontSize:11,color:T.textMuted,textTransform:'uppercase',marginBottom:4}}>Logged By</div><div style={{fontWeight:600}}>{viewOrder.logged_by_name||'—'}</div></div>
+        </div>
+        {viewOrder.notes&&<div style={{background:T.bg,borderRadius:8,padding:'10px 14px',marginBottom:16,fontSize:13,color:T.textSecondary}}><strong>Notes:</strong> {viewOrder.notes}</div>}
+        <h4 style={{fontSize:13,color:T.textSecondary,textTransform:'uppercase',letterSpacing:0.5,marginBottom:8}}>Items</h4>
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:13,marginBottom:16}}><thead><tr style={{borderBottom:`1px solid ${T.border}`}}>{['Item','Qty','Unit Cost','Total'].map(h=><th key={h} style={_th}>{h}</th>)}</tr></thead><tbody>{its.map((it,i)=><tr key={i} style={{borderBottom:`1px solid ${T.borderLight}`}}><td style={_td}>{gn(categories,it.category_id)} / {gn(brands,it.brand_id)}</td><td style={_td}>{it.quantity}</td><td style={{..._td,fontFamily:mono}}>{sym}{(parseFloat(it.unit_cost_gbp)*rate).toFixed(2)}</td><td style={{..._td,fontFamily:mono}}>{sym}{(it.quantity*parseFloat(it.unit_cost_gbp)*rate).toFixed(2)}</td></tr>)}</tbody></table>
+        <h4 style={{fontSize:13,color:T.textSecondary,textTransform:'uppercase',letterSpacing:0.5,marginBottom:8}}>Financials</h4>
+        <div style={{background:T.bg,borderRadius:10,padding:16,fontSize:14}}>
+          <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}><span>GMV</span><span style={{fontFamily:mono,fontWeight:600}}>{sym}{(rev*rate).toFixed(2)}</span></div>
+          <div style={{display:'flex',justifyContent:'space-between',marginBottom:6,color:T.textSecondary}}><span>Shipping</span><span style={{fontFamily:mono}}>({sym}{(ship*rate).toFixed(2)})</span></div>
+          <div style={{display:'flex',justifyContent:'space-between',marginBottom:6,color:T.textSecondary}}><span>Commission ({comm}% on {sym}{(commBase2*rate).toFixed(2)})</span><span style={{fontFamily:mono}}>({sym}{(commAmt2*rate).toFixed(2)})</span></div>
+          <div style={{display:'flex',justifyContent:'space-between',marginBottom:6,color:T.textSecondary}}><span>COGS (AVCO)</span><span style={{fontFamily:mono}}>({sym}{(orderCogs*rate).toFixed(2)})</span></div>
+          {refund>0&&<div style={{display:'flex',justifyContent:'space-between',marginBottom:6,color:T.red}}><span>Refund</span><span style={{fontFamily:mono}}>({sym}{(refund*rate).toFixed(2)})</span></div>}
+          <div style={{borderTop:`2px solid ${T.border}`,paddingTop:8,marginTop:8,display:'flex',justifyContent:'space-between',fontWeight:700}}><span>Net Margin</span><span style={{fontFamily:mono,color:margin>=0?T.green:T.red}}>{sym}{(net*rate).toFixed(2)} ({margin.toFixed(1)}%)</span></div>
+        </div>
+      </div>;})()}
+    </Modal>
 
     {view==='payments'&&<div>
       <div style={{...crd,padding:24,marginBottom:24}}>
