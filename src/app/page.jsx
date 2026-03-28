@@ -9,7 +9,7 @@ const LOGO_SRC = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAoHBwg
 
 const EXPENSE_CATS={'Revenue Deductions':['Discounts','Refunds','Sadqa/Zakat','Bank Charges','Packaging & Cleaning'],'Ops Costs':['Warehouse Rent','Warehouse Salaries','Utilities','Warehouse Stuff'],'Opex':['Marketing Cost','Salaries','Supplier Engagement','Tech Cost']};
 const BISMILLAH='بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ';
-const RIZQ_QUOTES={dashboard:{ar:'وَمَن يَتَّقِ اللَّهَ يَجْعَل لَّهُ مَخْرَجًا وَيَرْزُقْهُ مِنْ حَيْثُ لَا يَحْتَسِبُ',en:'"And whoever fears Allah — He will make for him a way out and provide for him from where he does not expect." — Surah At-Talaq 65:2-3'},procurement:{ar:'إِنَّ اللَّهَ هُوَ الرَّزَّاقُ ذُو الْقُوَّةِ الْمَتِينُ',en:'"Indeed, it is Allah who is the Provider, the Firm Possessor of Strength." — Surah Adh-Dhariyat 51:58'},dispatch:{ar:'',en:'"The honest and trustworthy merchant will be with the Prophets, the truthful, and the martyrs." — Tirmidhi'},expenses:{ar:'',en:'"No one who spends in the cause of Allah will find their wealth diminished." — Hadith (Bukhari & Muslim)'},finance:{ar:'',en:'"Wealth does not decrease because of charity." — Prophet Muhammad ﷺ (Muslim)'},settings:{ar:'',en:'"Tie your camel first, then put your trust in Allah." — Tirmidhi'}};
+const RIZQ_QUOTES={dashboard:{ar:'وَمَن يَتَّقِ اللَّهَ يَجْعَل لَّهُ مَخْرَجًا وَيَرْزُقْهُ مِنْ حَيْثُ لَا يَحْتَسِبُ',en:'"And whoever fears Allah — He will make for him a way out and provide for him from where he does not expect." — Surah At-Talaq 65:2-3'},procurement:{ar:'إِنَّ اللَّهَ هُوَ الرَّزَّاقُ ذُو الْقُوَّةِ الْمَتِينُ',en:'"Indeed, it is Allah who is the Provider, the Firm Possessor of Strength." — Surah Adh-Dhariyat 51:58'},dispatch:{ar:'',en:'"The honest and trustworthy merchant will be with the Prophets, the truthful, and the martyrs." — Tirmidhi'},expenses:{ar:'',en:'"No one who spends in the cause of Allah will find their wealth diminished." — Hadith (Bukhari & Muslim)'},finance:{ar:'',en:'"Wealth does not decrease because of charity." — Prophet Muhammad ﷺ (Muslim)'},settings:{ar:'',en:'"Tie your camel first, then put your trust in Allah." — Tirmidhi'},calculator:{ar:'',en:'"Nobody has ever eaten a better meal than that which one has earned by working with their own hands." — Prophet Muhammad ﷺ (Bukhari 2072)'}};
 
 const IconPackage=()=><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16.5 9.4l-9-5.19M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 002 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>;
 const IconTruck=()=><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>;
@@ -22,6 +22,8 @@ const IconEdit=()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" s
 const IconDashboard=()=><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>;
 const IconLogout=()=><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
 const IconExpense=()=><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>;
+
+const IconCalc=()=><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="8" y2="10.01"/><line x1="12" y1="10" x2="12" y2="10.01"/><line x1="16" y1="10" x2="16" y2="10.01"/><line x1="8" y1="14" x2="8" y2="14.01"/><line x1="12" y1="14" x2="12" y2="14.01"/><line x1="16" y1="14" x2="16" y2="14.01"/><line x1="8" y1="18" x2="16" y2="18"/></svg>;
 
 function RizqQuote({page}){const q=RIZQ_QUOTES[page];if(!q)return null;return<div style={{background:'rgba(107,127,94,0.06)',border:'1px solid rgba(107,127,94,0.15)',borderRadius:10,padding:'12px 16px',marginBottom:24,textAlign:'center'}}>{q.ar&&<div style={{fontFamily:"'Noto Sans Arabic', serif",fontSize:16,color:T.accent,marginBottom:6,lineHeight:1.8,direction:'rtl'}}>{q.ar}</div>}<div style={{fontSize:12,color:T.textSecondary,fontStyle:'italic',lineHeight:1.5}}>{q.en}</div></div>;}
 
@@ -70,7 +72,7 @@ export default function AppPage(){
   async function handleSignOut(){await supabase.auth.signOut();window.location.href='/login';}
   if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:T.bg,color:T.accent,fontFamily:"'Playfair Display', serif",fontSize:20}}>Loading...</div>;
 
-  const navItems=[{id:'dashboard',label:'Dashboard',icon:<IconDashboard/>},{id:'procurement',label:'Procurement',icon:<IconPackage/>},{id:'dispatch',label:'Dispatch',icon:<IconTruck/>},{id:'expenses',label:'Expenses',icon:<IconExpense/>},{id:'finance',label:'Finance',icon:<IconChart/>},{id:'settings',label:'Settings',icon:<IconSettings/>}];
+  const navItems=[{id:'dashboard',label:'Dashboard',icon:<IconDashboard/>},{id:'procurement',label:'Procurement',icon:<IconPackage/>},{id:'dispatch',label:'Dispatch',icon:<IconTruck/>},{id:'expenses',label:'Expenses',icon:<IconExpense/>},{id:'calculator',label:'Price Calc',icon:<IconCalc/>},{id:'finance',label:'Finance',icon:<IconChart/>},{id:'settings',label:'Settings',icon:<IconSettings/>}];
   const sp={supabase,user,categories,brands,qualities,suppliers,salesChannels,procurements,dispatches,expenses,settings,loadAll,rate,sym,currency,exchangeRates,isMobile};
 
   return(
@@ -91,7 +93,7 @@ export default function AppPage(){
       <main style={{flex:1,overflow:'auto',background:T.bg}}>
         {isMobile&&<div style={{padding:'12px 16px',borderBottom:`1px solid ${T.border}`,display:'flex',alignItems:'center',gap:12}}><button onClick={()=>setSidebarOpen(true)} style={{background:'none',border:'none',cursor:'pointer',padding:4,color:T.accent}}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button><img src={LOGO_SRC} alt="RR" style={{width:28,height:28,borderRadius:6,objectFit:'cover'}}/><span style={{fontFamily:dsp,fontWeight:700,fontSize:15,color:T.accent}}>Retro Revival</span></div>}
         <div style={{maxWidth:1100,margin:'0 auto',padding:isMobile?'20px 16px':'32px 36px'}} className="fade-in" key={activeTab}>
-          {activeTab==='dashboard'&&<DashboardTab {...sp}/>}{activeTab==='procurement'&&<ProcurementTab {...sp}/>}{activeTab==='dispatch'&&<DispatchTab {...sp}/>}{activeTab==='expenses'&&<ExpensesTab {...sp}/>}{activeTab==='finance'&&<FinanceTab {...sp}/>}{activeTab==='settings'&&<SettingsTab {...sp}/>}
+          {activeTab==='dashboard'&&<DashboardTab {...sp}/>}{activeTab==='procurement'&&<ProcurementTab {...sp}/>}{activeTab==='dispatch'&&<DispatchTab {...sp}/>}{activeTab==='expenses'&&<ExpensesTab {...sp}/>}{activeTab==='calculator'&&<PriceCalcTab {...sp}/>}{activeTab==='finance'&&<FinanceTab {...sp}/>}{activeTab==='settings'&&<SettingsTab {...sp}/>}
         </div>
       </main>
     </div>
@@ -128,14 +130,13 @@ function DashboardTab({categories,brands,procurements,dispatches,expenses,rate,s
 
 /* ===== PROCUREMENT (no quality, + supplier, + paid) ===== */
 function ProcurementTab({supabase,user,categories,brands,suppliers,procurements,loadAll,rate,sym}){
-  const [form,setForm]=useState({category_id:'',brand_id:'',supplier_id:'',totalPrice:'',quantity:'',date:new Date().toISOString().slice(0,10),is_paid:true});
+  const [form,setForm]=useState({category_id:'',brand_id:'',supplier_id:'',unitCost:'',quantity:'',date:new Date().toISOString().slice(0,10),is_paid:true});
   const [addingField,setAddingField]=useState(null);const [newOpt,setNewOpt]=useState('');const [saving,setSaving]=useState(false);
   const [editProc,setEditProc]=useState(null);
   const [csvRows,setCsvRows]=useState(null);const [csvImporting,setCsvImporting]=useState(false);const [csvError,setCsvError]=useState('');
   const gn=(list,id)=>list.find(i=>i.id===id)?.name||'—';
-  const unitPrice=form.totalPrice&&form.quantity&&parseInt(form.quantity)>0?(parseFloat(form.totalPrice)/parseInt(form.quantity)).toFixed(2):'';
 
-  async function submit(e){e.preventDefault();if(!form.category_id||!form.brand_id||!form.totalPrice||!form.quantity)return;setSaving(true);const qty=parseInt(form.quantity);const upGbp=(parseFloat(form.totalPrice)/rate)/qty;const uName=user?.user_metadata?.full_name||user?.email||'';await supabase.from('procurements').insert({category_id:form.category_id,brand_id:form.brand_id,supplier_id:form.supplier_id||null,unit_price_gbp:upGbp,quantity:qty,remaining_qty:qty,procured_at:form.date,logged_by_name:uName,is_paid:form.is_paid});setForm({category_id:'',brand_id:'',supplier_id:'',totalPrice:'',quantity:'',date:new Date().toISOString().slice(0,10),is_paid:true});await loadAll();setSaving(false);}
+  async function submit(e){e.preventDefault();if(!form.category_id||!form.brand_id||!form.unitCost||!form.quantity)return;setSaving(true);const qty=parseInt(form.quantity);const upGbp=parseFloat(form.unitCost)/rate;const uName=user?.user_metadata?.full_name||user?.email||'';await supabase.from('procurements').insert({category_id:form.category_id,brand_id:form.brand_id,supplier_id:form.supplier_id||null,unit_price_gbp:upGbp,quantity:qty,remaining_qty:qty,procured_at:form.date,logged_by_name:uName,is_paid:form.is_paid});setForm({category_id:'',brand_id:'',supplier_id:'',unitCost:'',quantity:'',date:new Date().toISOString().slice(0,10),is_paid:true});await loadAll();setSaving(false);}
   async function quickAdd(field){if(!newOpt.trim())return;const table=field==='category'?'categories':field==='brand'?'brands':'suppliers';const fk=field==='category'?'category_id':field==='brand'?'brand_id':'supplier_id';const{data}=await supabase.from(table).insert({name:newOpt.trim()}).select().single();if(data){setForm(p=>({...p,[fk]:data.id}));await loadAll();}setNewOpt('');setAddingField(null);}
   async function removeOpt(field,id){const table=field==='category'?'categories':field==='brand'?'brands':'suppliers';await supabase.from(table).delete().eq('id',id);await loadAll();}
   async function delProc(id){if(!confirm('Delete this procurement record?'))return;await supabase.from('procurements').delete().eq('id',id);await loadAll();}
@@ -156,9 +157,9 @@ function ProcurementTab({supabase,user,categories,brands,suppliers,procurements,
       <h3 style={{fontFamily:dsp,fontSize:16,color:T.accent,margin:'0 0 20px'}}>Add Stock</h3>
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))',gap:16,marginBottom:16}}><DD label="Category" field="category" options={categories} value={form.category_id} onChange={v=>setForm({...form,category_id:v})}/><DD label="Brand" field="brand" options={brands} value={form.brand_id} onChange={v=>setForm({...form,brand_id:v})}/><DD label="Supplier" field="supplier" options={suppliers} value={form.supplier_id} onChange={v=>setForm({...form,supplier_id:v})}/></div>
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(150px, 1fr))',gap:16,marginBottom:20}}>
-        <div><label style={lbl}>Total Price ({sym})</label><input type="number" step="0.01" min="0" value={form.totalPrice} onChange={e=>setForm({...form,totalPrice:e.target.value})} placeholder="0.00" style={inp}/></div>
+        <div><label style={lbl}>Unit Cost ({sym})</label><input type="number" step="0.01" min="0" value={form.unitCost} onChange={e=>setForm({...form,unitCost:e.target.value})} placeholder="0.00" style={inp}/></div>
         <div><label style={lbl}>Quantity</label><input type="number" min="1" value={form.quantity} onChange={e=>setForm({...form,quantity:e.target.value})} placeholder="0" style={inp}/></div>
-        <div><label style={lbl}>Unit Price ({sym})</label><div style={{...inp,background:T.bg,color:T.textSecondary,fontFamily:mono}}>{unitPrice?`${sym}${unitPrice}`:'—'}</div></div>
+        <div><label style={lbl}>Total ({sym})</label><div style={{...inp,background:T.bg,color:T.textSecondary,fontFamily:mono}}>{form.unitCost&&form.quantity&&parseInt(form.quantity)>0?`${sym}${(parseFloat(form.unitCost)*parseInt(form.quantity)).toFixed(2)}`:'—'}</div></div>
         <div><label style={lbl}>Date</label><input type="date" value={form.date} onChange={e=>setForm({...form,date:e.target.value})} style={inp}/></div>
         <div style={{display:'flex',alignItems:'center',gap:10,paddingTop:22}}><input type="checkbox" checked={form.is_paid} onChange={e=>setForm({...form,is_paid:e.target.checked})} style={{width:18,height:18,accentColor:T.accent}}/><label style={{fontSize:14,color:T.text,cursor:'pointer'}} onClick={()=>setForm({...form,is_paid:!form.is_paid})}>Paid</label></div>
       </div>
@@ -278,6 +279,102 @@ function ExpensesTab({supabase,user,expenses,loadAll,rate,sym}){
       <button type="submit" disabled={saving} style={{...btnP,opacity:saving?0.6:1}}>{saving?'Saving...':'Record Expense'}</button>
     </form>
     {expenses.length>0&&<div style={{...crd,padding:0,overflow:'hidden'}}><h3 style={{fontFamily:dsp,fontSize:16,color:T.accent,padding:'16px 20px 0',margin:0}}>Expense History</h3><div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontSize:13,marginTop:12}}><thead><tr style={{borderBottom:`1px solid ${T.border}`}}>{['Date','Category','Subcategory','Amount','Notes','By',''].map(h=><th key={h} style={_th}>{h}</th>)}</tr></thead><tbody>{expenses.map(e=><tr key={e.id} style={{borderBottom:`1px solid ${T.borderLight}`}}><td style={{..._td,color:T.textSecondary}}>{new Date(e.expense_date).toLocaleDateString('en-GB')}</td><td style={_td}>{e.category}</td><td style={_td}>{e.subcategory}</td><td style={{..._td,fontFamily:mono}}>{sym}{(parseFloat(e.amount_gbp)*rate).toFixed(2)}</td><td style={{..._td,color:T.textMuted,fontSize:12}}>{e.notes||'—'}</td><td style={{..._td,fontSize:11,color:T.textMuted}}>{e.logged_by_name||'—'}</td><td style={_td}><button onClick={()=>del(e.id)} style={{background:'none',border:'none',color:T.red,cursor:'pointer',opacity:0.5,padding:4}}><IconTrash/></button></td></tr>)}</tbody></table></div></div>}
+  </div>);
+}
+
+/* ===== PRICE CALCULATOR ===== */
+function PriceCalcTab({categories,brands,procurements,rate,sym}){
+  const stock=getAvailableStock(procurements);
+  const gn=(list,id)=>list.find(i=>i.id===id)?.name||'—';
+  const [lines,setLines]=useState([{stockKey:'',qty:'1'}]);
+  function addLine(){setLines([...lines,{stockKey:'',qty:'1'}]);}
+  function removeLine(i){setLines(lines.filter((_,idx)=>idx!==i));}
+  function updateLine(i,f,v){const n=[...lines];n[i]={...n[i],[f]:v};setLines(n);}
+
+  const results=lines.map(l=>{
+    if(!l.stockKey||!l.qty||parseInt(l.qty)<=0)return null;
+    const sk=stock.find(s=>`${s.category_id}|${s.brand_id}`===l.stockKey);
+    if(!sk)return null;
+    const qty=parseInt(l.qty);
+    const totalCost=sk.avgCost*qty;
+    const minSell50=totalCost/0.5; // 50% margin means cost is 50% of selling price
+    return{stockKey:l.stockKey,qty,avgCost:sk.avgCost,totalCost,minSell50,avail:sk.totalQty,cat:gn(categories,sk.category_id),brand:gn(brands,sk.brand_id)};
+  }).filter(Boolean);
+
+  const grandCost=results.reduce((s,r)=>s+r.totalCost,0);
+  const grandMinSell=results.reduce((s,r)=>s+r.minSell50,0);
+
+  return(<div>
+    <h1 style={{fontFamily:dsp,fontSize:28,fontWeight:700,color:T.accent,margin:'0 0 6px'}}>Price Calculator</h1>
+    <p style={{color:T.textSecondary,fontSize:14,margin:'0 0 20px'}}>Calculate minimum selling price for 50% margin</p>
+    <RizqQuote page="calculator"/>
+
+    <div style={{...crd,padding:24,marginBottom:32}}>
+      <h3 style={{fontFamily:dsp,fontSize:16,color:T.accent,margin:'0 0 20px'}}>Select Items</h3>
+      {lines.map((line,i)=><div key={i} style={{display:'flex',gap:12,marginBottom:10,alignItems:'center'}}>
+        <select value={line.stockKey} onChange={e=>updateLine(i,'stockKey',e.target.value)} style={{...sel,flex:3}}>
+          <option value="">Select stock item</option>
+          {stock.map(s=>{const key=`${s.category_id}|${s.brand_id}`;return<option key={key} value={key}>{gn(categories,s.category_id)} / {gn(brands,s.brand_id)} — {s.totalQty} avail @ {sym}{(s.avgCost*rate).toFixed(2)}/unit</option>;})}
+        </select>
+        <input type="number" min="1" value={line.qty} onChange={e=>updateLine(i,'qty',e.target.value)} placeholder="Qty" style={{...inp,flex:1}}/>
+        {lines.length>1&&<button onClick={()=>removeLine(i)} style={{background:'none',border:'none',color:T.red,cursor:'pointer',padding:4,flexShrink:0}}><IconX/></button>}
+      </div>)}
+      <button onClick={addLine} style={{...btnS,padding:'8px 16px',display:'flex',alignItems:'center',gap:6,marginTop:8}}><IconPlus/> Add Item</button>
+    </div>
+
+    {stock.length>0&&<div style={{...crd,padding:0,overflow:'hidden',marginBottom:32}}>
+      <h3 style={{fontFamily:dsp,fontSize:16,color:T.accent,padding:'16px 20px 0',margin:0}}>All Stock — Minimum Pricing Reference</h3>
+      <p style={{color:T.textSecondary,fontSize:12,padding:'4px 20px 0',margin:0}}>Based on AVCO cost · 50% gross margin target</p>
+      <div style={{overflowX:'auto'}}>
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:13,marginTop:12}}>
+          <thead><tr style={{borderBottom:`1px solid ${T.border}`}}>
+            {['Category','Brand','In Stock','AVCO Cost/Unit','Min Sell/Unit (50%)','Min Sell ×10','Min Sell ×25'].map(h=><th key={h} style={_th}>{h}</th>)}
+          </tr></thead>
+          <tbody>{stock.map((s,i)=>{const minUnit=s.avgCost/0.5;return<tr key={i} style={{borderBottom:`1px solid ${T.borderLight}`}}>
+            <td style={_td}>{gn(categories,s.category_id)}</td>
+            <td style={_td}>{gn(brands,s.brand_id)}</td>
+            <td style={{..._td,fontWeight:600}}>{s.totalQty}</td>
+            <td style={{..._td,fontFamily:mono}}>{sym}{(s.avgCost*rate).toFixed(2)}</td>
+            <td style={{..._td,fontFamily:mono,fontWeight:700,color:T.accent}}>{sym}{(minUnit*rate).toFixed(2)}</td>
+            <td style={{..._td,fontFamily:mono,color:T.textSecondary}}>{sym}{(minUnit*10*rate).toFixed(2)}</td>
+            <td style={{..._td,fontFamily:mono,color:T.textSecondary}}>{sym}{(minUnit*25*rate).toFixed(2)}</td>
+          </tr>;})}</tbody>
+        </table>
+      </div>
+    </div>}
+
+    {results.length>0&&<div style={{...crd,padding:0,overflow:'hidden'}}>
+      <h3 style={{fontFamily:dsp,fontSize:16,color:T.accent,padding:'16px 20px 0',margin:0}}>Pricing Breakdown</h3>
+      <div style={{overflowX:'auto'}}>
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:14,marginTop:12}}>
+          <thead><tr style={{borderBottom:`1px solid ${T.border}`}}>
+            {['Item','Qty','Avg Cost/Unit','Total Cost','Min Sell (50% margin)'].map(h=><th key={h} style={_th}>{h}</th>)}
+          </tr></thead>
+          <tbody>
+            {results.map((r,i)=><tr key={i} style={{borderBottom:`1px solid ${T.borderLight}`}}>
+              <td style={_td}>{r.cat} / {r.brand}</td>
+              <td style={_td}>{r.qty}</td>
+              <td style={{..._td,fontFamily:mono}}>{sym}{(r.avgCost*rate).toFixed(2)}</td>
+              <td style={{..._td,fontFamily:mono}}>{sym}{(r.totalCost*rate).toFixed(2)}</td>
+              <td style={{..._td,fontFamily:mono,fontWeight:700,color:T.accent}}>{sym}{(r.minSell50*rate).toFixed(2)}</td>
+            </tr>)}
+            {results.length>1&&<tr style={{borderTop:`2px solid ${T.border}`,fontWeight:700}}>
+              <td style={_td} colSpan={3}>TOTAL</td>
+              <td style={{..._td,fontFamily:mono}}>{sym}{(grandCost*rate).toFixed(2)}</td>
+              <td style={{..._td,fontFamily:mono,color:T.accent}}>{sym}{(grandMinSell*rate).toFixed(2)}</td>
+            </tr>}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{padding:20}}>
+        <div style={{background:T.accentBg,border:`1px solid ${T.accentBorder}`,borderRadius:10,padding:20,textAlign:'center'}}>
+          <div style={{fontSize:12,color:T.textSecondary,textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>Minimum Selling Price for 50% Margin</div>
+          <div style={{fontSize:36,fontWeight:700,fontFamily:dsp,color:T.accent}}>{sym}{(grandMinSell*rate).toFixed(2)}</div>
+          <div style={{fontSize:13,color:T.textMuted,marginTop:8}}>Total cost: {sym}{(grandCost*rate).toFixed(2)} · Sell at or above this price to maintain 50% gross margin</div>
+        </div>
+      </div>
+    </div>}
   </div>);
 }
 
