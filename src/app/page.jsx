@@ -399,8 +399,9 @@ function PriceCalcTab({categories,brands,procurements,rate,sym}){
   </div>);
 }
 
-/* ===== FINANCE ===== */
-function FinanceTab({dispatches,expenses,rate,sym,currency}){
+/* ===== FINANCE (P&L + Order Level + Payments) ===== */
+function FinanceTab({supabase,dispatches,expenses,salesChannels,categories,brands,loadAll,rate,sym,currency}){
+  const [view,setView]=useState('pnl');
   const periods=getBillingPeriods(dispatches,expenses);const [selP,setSelP]=useState(Math.max(0,periods.length-1));
   const period=periods[selP];const fDisp=period?dispatches.filter(d=>{const dt=new Date(d.dispatched_at);return dt>=period.start&&dt<=period.end;}):[];const fExp=period?(expenses||[]).filter(e=>{const dt=new Date(e.expense_date);return dt>=period.start&&dt<=period.end;}):[];
   const gmv=fDisp.reduce((s,d)=>s+(parseFloat(d.selling_price_gbp)||0),0);const totalShipping=fDisp.reduce((s,d)=>s+(parseFloat(d.shipping_cost_gbp)||0),0);const totalCommission=fDisp.reduce((s,d)=>{const rev=parseFloat(d.selling_price_gbp)||0;const sh=parseFloat(d.shipping_cost_gbp)||0;const pct=parseFloat(d.commission_pct)||0;return s+Math.max(0,rev-sh)*pct/100;},0);const totalRefunds=fDisp.reduce((s,d)=>s+(parseFloat(d.refund_amount_gbp)||0),0);const cogs=fDisp.reduce((s,d)=>s+(d.dispatch_items||[]).reduce((ss,it)=>ss+it.quantity*parseFloat(it.unit_cost_gbp),0),0);
@@ -409,25 +410,125 @@ function FinanceTab({dispatches,expenses,rate,sym,currency}){
   const totalRevDed=Object.values(revDed).reduce((s,v)=>s+v,0);const totalOps=Object.values(opsCosts).reduce((s,v)=>s+v,0);const totalOpex=Object.values(opex).reduce((s,v)=>s+v,0);
   const nmv=gmv-totalShipping-totalCommission-totalRefunds;const netRev=nmv-totalRevDed-cogs;const contMargin=netRev-totalOps;const ebitda=contMargin-totalOpex;
   function Row({label,val,bold,indent,highlight,separator}){if(separator)return<tr><td colSpan={2} style={{padding:'6px 16px',borderBottom:`2px solid ${T.border}`}}></td></tr>;const v=val*rate;const neg=v<0;return<tr style={{borderBottom:`1px solid ${bold?T.border:T.borderLight}`}}><td style={{..._td,fontWeight:bold?700:400,paddingLeft:indent?32:16,color:highlight||T.text}}>{label}</td><td style={{..._td,fontFamily:mono,fontWeight:bold?700:400,textAlign:'right',color:highlight||(neg?T.red:T.text)}}>{neg?`(${sym}${Math.abs(v).toFixed(2)})`:`${sym}${v.toFixed(2)}`}</td></tr>;}
+
+  const [pdfParsing,setPdfParsing]=useState(false);const [pdfResult,setPdfResult]=useState(null);const [pdfError,setPdfError]=useState('');const [pdfApplying,setPdfApplying]=useState(false);
+  const gn=(list,id)=>list.find(i=>i.id===id)?.name||'—';
+
+  async function loadPdfJs(){if(window.pdfjsLib)return window.pdfjsLib;return new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';s.onload=()=>{window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';resolve(window.pdfjsLib);};s.onerror=()=>reject(new Error('Failed to load PDF.js'));document.head.appendChild(s);});}
+
+  async function handlePdfUpload(e){
+    const file=e.target.files?.[0];if(!file)return;setPdfError('');setPdfResult(null);setPdfParsing(true);e.target.value='';
+    try{
+      const pdfjsLib=await loadPdfJs();const buf=await file.arrayBuffer();const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+      let allText='';for(let i=1;i<=pdf.numPages;i++){const page=await pdf.getPage(i);const tc=await page.getTextContent();allText+=tc.items.map(it=>it.str).join(' ')+'\n';}
+      const payoutDateMatch=allText.match(/Payout date\s*([\d]+\s+\w+\s+\d{4})/i);const payoutTotalMatch=allText.match(/Payout balance\s*([\d,.]+)\s*GBP/i);
+      const payoutDate=payoutDateMatch?payoutDateMatch[1]:'Unknown';const payoutTotal=payoutTotalMatch?parseFloat(payoutTotalMatch[1].replace(',','')):0;
+      const orderPattern=/(\d{5,6}\/\d{2})/g;const orderNumbers=[...new Set([...allText.matchAll(orderPattern)].map(m=>m[1]))];
+      const orders=[];
+      for(const ordNum of orderNumbers){
+        const escOrd=ordNum.replace('/','\\\/');
+        const detailRegex=new RegExp(escOrd+'[\\s\\S]*?Total Base Price\\s+([\\d,.]+)[\\s\\S]*?(?:Fleek )?Commission\\s*\\(([\\d.]+)%\\)\\s+[\\-]?([\\d,.]+)[\\s\\S]*?Balance\\s+([\\-]?[\\d,.]+)','i');
+        const match=allText.match(detailRegex);if(!match)continue;
+        const basePrice=parseFloat(match[1].replace(',',''));const commPct2=parseFloat(match[2]);const commAmt2=parseFloat(match[3].replace(',',''));const balance=parseFloat(match[4].replace(',',''));
+        const refundRegex=new RegExp(escOrd+'[\\s\\S]*?Refund\\s+[\\-]?([\\d,.]+)','i');const refMatch=allText.match(refundRegex);const refundAmt=refMatch?parseFloat(refMatch[1].replace(',','')):0;
+        if(orders.find(o=>o.orderNumber===ordNum))continue;
+        orders.push({orderNumber:ordNum,basePrice,commPct:commPct2,commAmt:commAmt2,refundAmt,balance,isRefund:balance<0});
+      }
+      const matched=[];const unmatched=[];
+      for(const ord of orders){const disp=dispatches.find(d=>d.order_id===ord.orderNumber);if(disp)matched.push({...ord,dispatchId:disp.id,currentStatus:disp.payment_status||'Pending'});else unmatched.push(ord);}
+      setPdfResult({filename:file.name,payoutDate,payoutTotal,orders,matched,unmatched});
+    }catch(err){setPdfError(err.message||'Failed to parse PDF');}
+    setPdfParsing(false);
+  }
+
+  async function applyPdfResults(){
+    if(!pdfResult)return;setPdfApplying(true);
+    for(const m of pdfResult.matched){const updates={payment_status:m.isRefund?'Partial':'Paid',payout_amount_gbp:Math.max(0,m.balance)};if(m.refundAmt>0)updates.refund_amount_gbp=m.refundAmt;await supabase.from('dispatches').update(updates).eq('id',m.dispatchId);}
+    await loadAll();setPdfApplying(false);setPdfResult({...pdfResult,applied:true});
+  }
+
+  const tabBtn=(id)=>({background:view===id?T.accent:'transparent',color:view===id?'#fff':T.textSecondary,border:`1px solid ${view===id?T.accent:T.border}`,borderRadius:6,padding:'8px 16px',cursor:'pointer',fontWeight:600,fontFamily:'inherit',fontSize:13});
+
   if(periods.length===0)return<div><h1 style={{fontFamily:dsp,fontSize:28,fontWeight:700,color:T.accent,margin:'0 0 6px'}}>Finance</h1><p style={{color:T.textSecondary,fontSize:14,margin:'0 0 20px'}}>P&L Overview · Billing cycle: 8th–7th</p><RizqQuote page="finance"/><div style={{...crd,padding:40,textAlign:'center',color:T.textMuted}}>No data yet.</div></div>;
   return(<div>
     <h1 style={{fontFamily:dsp,fontSize:28,fontWeight:700,color:T.accent,margin:'0 0 6px'}}>Finance</h1>
     <p style={{color:T.textSecondary,fontSize:14,margin:'0 0 20px'}}>P&L Overview · AVCO costing · Billing cycle: 8th–7th</p>
     <RizqQuote page="finance"/>
+    <div style={{display:'flex',gap:8,marginBottom:24,flexWrap:'wrap'}}><button onClick={()=>setView('pnl')} style={tabBtn('pnl')}>P&L Summary</button><button onClick={()=>setView('orders')} style={tabBtn('orders')}>Order P&L</button><button onClick={()=>setView('payments')} style={tabBtn('payments')}>Payments</button></div>
     <div style={{marginBottom:24}}><select value={selP} onChange={e=>setSelP(parseInt(e.target.value))} style={sel}>{periods.map((p,i)=><option key={i} value={i}>{p.label}</option>)}</select></div>
-    <div style={{...crd,padding:0,overflow:'hidden'}}><table style={{width:'100%',borderCollapse:'collapse',fontSize:14}}><thead><tr style={{borderBottom:`2px solid ${T.border}`}}><th style={{..._th,fontSize:13}}>Item</th><th style={{..._th,fontSize:13,textAlign:'right'}}>{currency}</th></tr></thead><tbody>
+
+    {view==='pnl'&&<div style={{...crd,padding:0,overflow:'hidden'}}><table style={{width:'100%',borderCollapse:'collapse',fontSize:14}}><thead><tr style={{borderBottom:`2px solid ${T.border}`}}><th style={{..._th,fontSize:13}}>Item</th><th style={{..._th,fontSize:13,textAlign:'right'}}>{currency}</th></tr></thead><tbody>
       <Row label="GMV" val={gmv} bold/><Row label="Shipping" val={-totalShipping} indent/><Row label="Commission" val={-totalCommission} indent/><Row label="Refunds" val={-totalRefunds} indent/>
       <Row label="NMV" val={nmv} bold highlight={T.accent}/>
-      {Object.entries(revDed).map(([k,v])=><Row key={k} label={k} val={-v} indent/>)}
-      <Row label="COGS" val={-cogs} indent/>
+      {Object.entries(revDed).map(([k,v])=><Row key={k} label={k} val={-v} indent/>)}<Row label="COGS" val={-cogs} indent/>
       <Row label="Net Revenue" val={netRev} bold highlight={netRev>=0?T.green:T.red}/><Row separator/>
-      {Object.entries(opsCosts).map(([k,v])=><Row key={k} label={k} val={-v} indent/>)}
-      <Row label="Total Ops Cost" val={-totalOps} bold/><Row separator/>
+      {Object.entries(opsCosts).map(([k,v])=><Row key={k} label={k} val={-v} indent/>)}<Row label="Total Ops Cost" val={-totalOps} bold/><Row separator/>
       <Row label="Contribution Margin" val={contMargin} bold highlight={contMargin>=0?T.green:T.red}/><Row separator/>
-      {Object.entries(opex).map(([k,v])=><Row key={k} label={k} val={-v} indent/>)}
-      <Row label="Total Opex" val={-totalOpex} bold/><Row separator/>
+      {Object.entries(opex).map(([k,v])=><Row key={k} label={k} val={-v} indent/>)}<Row label="Total Opex" val={-totalOpex} bold/><Row separator/>
       <Row label="EBITDA" val={ebitda} bold highlight={ebitda>=0?T.green:T.red}/>
-    </tbody></table></div>
+    </tbody></table></div>}
+
+    {view==='orders'&&<div style={{...crd,padding:0,overflow:'hidden'}}><div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}><thead><tr style={{borderBottom:`2px solid ${T.border}`}}>
+      {['Date','Order ID','Channel','Items','GMV','Ship','Comm','Refund','COGS','Net P&L','Status'].map(h=><th key={h} style={{..._th,fontSize:10}}>{h}</th>)}
+    </tr></thead><tbody>{fDisp.length>0?fDisp.map(d=>{
+      const rev=parseFloat(d.selling_price_gbp)||0;const ship=parseFloat(d.shipping_cost_gbp)||0;const comm=parseFloat(d.commission_pct)||0;const commA=Math.max(0,rev-ship)*comm/100;const refund=parseFloat(d.refund_amount_gbp||0);const orderCogs=(d.dispatch_items||[]).reduce((s2,it)=>s2+it.quantity*parseFloat(it.unit_cost_gbp),0);const net=rev-ship-commA-refund-orderCogs;const ps=d.payment_status||'Pending';const psCol=ps==='Paid'?T.green:ps==='Partial'?'#B8862D':T.textMuted;
+      const itemDesc=(d.dispatch_items||[]).map(it=>`${gn(categories,it.category_id)}/${gn(brands,it.brand_id)} x${it.quantity}`).join(', ');
+      return<tr key={d.id} style={{borderBottom:`1px solid ${T.borderLight}`}}>
+        <td style={{..._td,color:T.textSecondary,fontSize:11}}>{new Date(d.dispatched_at).toLocaleDateString('en-GB')}</td>
+        <td style={{..._td,fontFamily:mono,color:T.accent,fontSize:11}}>{d.order_id}</td>
+        <td style={{..._td,fontSize:11}}>{d.sales_channel_id?gn(salesChannels,d.sales_channel_id):'—'}</td>
+        <td style={{..._td,fontSize:10,color:T.textSecondary,maxWidth:150,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{itemDesc||'—'}</td>
+        <td style={{..._td,fontFamily:mono}}>{sym}{(rev*rate).toFixed(2)}</td>
+        <td style={{..._td,fontFamily:mono,color:T.textSecondary}}>{ship>0?`(${sym}${(ship*rate).toFixed(2)})`:'—'}</td>
+        <td style={{..._td,fontFamily:mono,color:T.textSecondary}}>({sym}{(commA*rate).toFixed(2)})</td>
+        <td style={{..._td,fontFamily:mono,color:refund>0?T.red:T.textMuted}}>{refund>0?`(${sym}${(refund*rate).toFixed(2)})`:'—'}</td>
+        <td style={{..._td,fontFamily:mono,color:T.textSecondary}}>({sym}{(orderCogs*rate).toFixed(2)})</td>
+        <td style={{..._td,fontFamily:mono,fontWeight:600,color:net>=0?T.green:T.red}}>{sym}{(net*rate).toFixed(2)}</td>
+        <td style={{..._td,fontSize:11,fontWeight:600,color:psCol}}>{ps}</td>
+      </tr>;}):
+      <tr><td colSpan={11} style={{..._td,textAlign:'center',color:T.textMuted,padding:30}}>No dispatches in this period</td></tr>}
+    </tbody></table></div></div>}
+
+    {view==='payments'&&<div>
+      <div style={{...crd,padding:24,marginBottom:24}}>
+        <h3 style={{fontFamily:dsp,fontSize:16,color:T.accent,margin:'0 0 4px'}}>Upload Fleek Payout PDF</h3>
+        <p style={{color:T.textSecondary,fontSize:13,margin:'0 0 16px'}}>Upload the detailed payout PDF from Fleek. The system parses the Order Level Details, matches against your dispatches, and updates payment statuses and refunds.</p>
+        <label style={{...btnP,display:'inline-flex',alignItems:'center',gap:8,cursor:'pointer',opacity:pdfParsing?0.6:1}}>{pdfParsing?'Parsing PDF...':'Upload Payout PDF'}<input type="file" accept=".pdf" onChange={handlePdfUpload} disabled={pdfParsing} style={{display:'none'}}/></label>
+        {pdfError&&<div style={{background:'rgba(179,58,58,0.08)',border:'1px solid rgba(179,58,58,0.3)',borderRadius:8,padding:'10px 14px',marginTop:16,color:T.red,fontSize:13}}>{pdfError}</div>}
+      </div>
+
+      {pdfResult&&<div>
+        <div style={{...crd,padding:20,marginBottom:16}}><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))',gap:16}}>
+          <div><div style={{fontSize:11,color:T.textMuted,textTransform:'uppercase',marginBottom:4}}>File</div><div style={{fontWeight:600,fontSize:13}}>{pdfResult.filename}</div></div>
+          <div><div style={{fontSize:11,color:T.textMuted,textTransform:'uppercase',marginBottom:4}}>Payout Date</div><div style={{fontWeight:600}}>{pdfResult.payoutDate}</div></div>
+          <div><div style={{fontSize:11,color:T.textMuted,textTransform:'uppercase',marginBottom:4}}>Payout Total</div><div style={{fontWeight:700,fontFamily:mono,color:T.accent}}>{sym}{(pdfResult.payoutTotal*rate).toFixed(2)}</div></div>
+          <div><div style={{fontSize:11,color:T.textMuted,textTransform:'uppercase',marginBottom:4}}>Orders Found</div><div style={{fontWeight:600}}>{pdfResult.orders.length}</div></div>
+        </div></div>
+
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))',gap:16,marginBottom:16}}>
+          <div style={{...crd,borderColor:'rgba(61,122,74,0.3)',background:'rgba(61,122,74,0.04)'}}><div style={{fontSize:32,fontWeight:700,fontFamily:dsp,color:T.green}}>{pdfResult.matched.length}</div><div style={{fontSize:13,color:T.textSecondary}}>Matched to your dispatches</div></div>
+          {pdfResult.unmatched.length>0&&<div style={{...crd,borderColor:'rgba(212,168,83,0.5)',background:'rgba(212,168,83,0.04)'}}><div style={{fontSize:32,fontWeight:700,fontFamily:dsp,color:'#B8862D'}}>{pdfResult.unmatched.length}</div><div style={{fontSize:13,color:T.textSecondary}}>Not found in your system</div></div>}
+        </div>
+
+        {pdfResult.unmatched.length>0&&<div style={{background:'rgba(212,168,83,0.08)',border:'1px solid rgba(212,168,83,0.3)',borderRadius:10,padding:'14px 18px',marginBottom:16,fontSize:13}}>
+          <div style={{fontWeight:700,color:'#B8862D',marginBottom:6}}>Unmatched Orders (not blocking import)</div>
+          <div style={{color:T.textSecondary}}>These order IDs were not found in your dispatches: <strong>{pdfResult.unmatched.map(u=>u.orderNumber).join(', ')}</strong>. You can still apply matched results below.</div>
+        </div>}
+
+        {pdfResult.matched.length>0&&<div style={{...crd,padding:0,overflow:'hidden',marginBottom:16}}><h4 style={{padding:'14px 20px 0',margin:0,fontFamily:dsp,fontSize:14,color:T.accent}}>Matched Orders</h4><div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontSize:12,marginTop:8}}><thead><tr style={{borderBottom:`1px solid ${T.border}`}}>{['Order','Base Price','Commission','Refund','Balance','Current','→ New'].map(h=><th key={h} style={{..._th,fontSize:10}}>{h}</th>)}</tr></thead><tbody>{pdfResult.matched.map((m,i)=><tr key={i} style={{borderBottom:`1px solid ${T.borderLight}`}}>
+          <td style={{..._td,fontFamily:mono,fontSize:11}}>{m.orderNumber}</td>
+          <td style={{..._td,fontFamily:mono}}>{sym}{(m.basePrice*rate).toFixed(2)}</td>
+          <td style={{..._td,fontFamily:mono,color:T.textSecondary}}>({m.commPct}%) {sym}{(m.commAmt*rate).toFixed(2)}</td>
+          <td style={{..._td,fontFamily:mono,color:m.refundAmt>0?T.red:T.textMuted}}>{m.refundAmt>0?`${sym}${(m.refundAmt*rate).toFixed(2)}`:'—'}</td>
+          <td style={{..._td,fontFamily:mono,fontWeight:600,color:m.balance>=0?T.green:T.red}}>{sym}{(m.balance*rate).toFixed(2)}</td>
+          <td style={{..._td,fontSize:11,color:T.textMuted}}>{m.currentStatus}</td>
+          <td style={{..._td,fontSize:11,fontWeight:600,color:m.isRefund?'#B8862D':T.green}}>{m.isRefund?'Partial':'Paid'}</td>
+        </tr>)}</tbody></table></div></div>}
+
+        {!pdfResult.applied&&pdfResult.matched.length>0&&<button onClick={applyPdfResults} disabled={pdfApplying} style={{...btnP,opacity:pdfApplying?0.6:1}}>{pdfApplying?'Applying...':'Apply Payment Updates'}</button>}
+        {pdfResult.applied&&<div style={{background:'rgba(61,122,74,0.08)',border:'1px solid rgba(61,122,74,0.3)',borderRadius:10,padding:'14px 18px',color:T.green,fontSize:14,fontWeight:600}}>✓ Payment statuses updated for {pdfResult.matched.length} orders</div>}
+      </div>}
+    </div>}
   </div>);
 }
 
