@@ -287,9 +287,19 @@ function PriceCalcTab({categories,brands,procurements,rate,sym}){
   const stock=getAvailableStock(procurements);
   const gn=(list,id)=>list.find(i=>i.id===id)?.name||'—';
   const [lines,setLines]=useState([{stockKey:'',qty:'1'}]);
+  const [filterCat,setFilterCat]=useState('');const [filterBrand,setFilterBrand]=useState('');
   function addLine(){setLines([...lines,{stockKey:'',qty:'1'}]);}
   function removeLine(i){setLines(lines.filter((_,idx)=>idx!==i));}
   function updateLine(i,f,v){const n=[...lines];n[i]={...n[i],[f]:v};setLines(n);}
+
+  const filteredStock=stock.filter(s=>{
+    if(filterCat&&s.category_id!==filterCat)return false;
+    if(filterBrand&&s.brand_id!==filterBrand)return false;
+    return true;
+  });
+
+  const stockCats=[...new Set(stock.map(s=>s.category_id))];
+  const stockBrands=[...new Set(stock.map(s=>s.brand_id))];
 
   const results=lines.map(l=>{
     if(!l.stockKey||!l.qty||parseInt(l.qty)<=0)return null;
@@ -297,7 +307,7 @@ function PriceCalcTab({categories,brands,procurements,rate,sym}){
     if(!sk)return null;
     const qty=parseInt(l.qty);
     const totalCost=sk.avgCost*qty;
-    const minSell50=totalCost/0.5; // 50% margin means cost is 50% of selling price
+    const minSell50=totalCost/0.5;
     return{stockKey:l.stockKey,qty,avgCost:sk.avgCost,totalCost,minSell50,avail:sk.totalQty,cat:gn(categories,sk.category_id),brand:gn(brands,sk.brand_id)};
   }).filter(Boolean);
 
@@ -309,8 +319,40 @@ function PriceCalcTab({categories,brands,procurements,rate,sym}){
     <p style={{color:T.textSecondary,fontSize:14,margin:'0 0 20px'}}>Calculate minimum selling price for 50% margin</p>
     <RizqQuote page="calculator"/>
 
+    {stock.length>0&&<div style={{...crd,padding:0,overflow:'hidden',marginBottom:32}}>
+      <div style={{padding:'16px 20px 0'}}><h3 style={{fontFamily:dsp,fontSize:16,color:T.accent,margin:'0 0 4px'}}>All Stock — Minimum Pricing Reference</h3><p style={{color:T.textSecondary,fontSize:12,margin:0}}>Based on AVCO cost · 50% gross margin target</p></div>
+      <div style={{display:'flex',gap:12,padding:'12px 20px',flexWrap:'wrap'}}>
+        <select value={filterCat} onChange={e=>setFilterCat(e.target.value)} style={{...sel,width:'auto',minWidth:160,fontSize:13,padding:'8px 10px'}}>
+          <option value="">All Categories</option>
+          {stockCats.map(id=><option key={id} value={id}>{gn(categories,id)}</option>)}
+        </select>
+        <select value={filterBrand} onChange={e=>setFilterBrand(e.target.value)} style={{...sel,width:'auto',minWidth:160,fontSize:13,padding:'8px 10px'}}>
+          <option value="">All Brands</option>
+          {stockBrands.map(id=><option key={id} value={id}>{gn(brands,id)}</option>)}
+        </select>
+        {(filterCat||filterBrand)&&<button onClick={()=>{setFilterCat('');setFilterBrand('');}} style={{background:'none',border:'none',color:T.accent,cursor:'pointer',fontSize:12,fontFamily:'inherit',textDecoration:'underline'}}>Clear filters</button>}
+      </div>
+      <div style={{overflowX:'auto'}}>
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+          <thead><tr style={{borderBottom:`1px solid ${T.border}`}}>
+            {['Category','Brand','In Stock','AVCO Cost/Unit','Min Sell/Unit (50%)','Min Sell ×10','Min Sell ×25'].map(h=><th key={h} style={_th}>{h}</th>)}
+          </tr></thead>
+          <tbody>{filteredStock.length>0?filteredStock.map((s,i)=>{const minUnit=s.avgCost/0.5;return<tr key={i} style={{borderBottom:`1px solid ${T.borderLight}`}}>
+            <td style={_td}>{gn(categories,s.category_id)}</td>
+            <td style={_td}>{gn(brands,s.brand_id)}</td>
+            <td style={{..._td,fontWeight:600}}>{s.totalQty}</td>
+            <td style={{..._td,fontFamily:mono}}>{sym}{(s.avgCost*rate).toFixed(2)}</td>
+            <td style={{..._td,fontFamily:mono,fontWeight:700,color:T.accent}}>{sym}{(minUnit*rate).toFixed(2)}</td>
+            <td style={{..._td,fontFamily:mono,color:T.textSecondary}}>{sym}{(minUnit*10*rate).toFixed(2)}</td>
+            <td style={{..._td,fontFamily:mono,color:T.textSecondary}}>{sym}{(minUnit*25*rate).toFixed(2)}</td>
+          </tr>;}):
+          <tr><td colSpan={7} style={{..._td,textAlign:'center',color:T.textMuted,padding:20}}>No items match the current filters</td></tr>}</tbody>
+        </table>
+      </div>
+    </div>}
+
     <div style={{...crd,padding:24,marginBottom:32}}>
-      <h3 style={{fontFamily:dsp,fontSize:16,color:T.accent,margin:'0 0 20px'}}>Select Items</h3>
+      <h3 style={{fontFamily:dsp,fontSize:16,color:T.accent,margin:'0 0 20px'}}>Bundle Price Calculator</h3>
       {lines.map((line,i)=><div key={i} style={{display:'flex',gap:12,marginBottom:10,alignItems:'center'}}>
         <select value={line.stockKey} onChange={e=>updateLine(i,'stockKey',e.target.value)} style={{...sel,flex:3}}>
           <option value="">Select stock item</option>
@@ -321,27 +363,6 @@ function PriceCalcTab({categories,brands,procurements,rate,sym}){
       </div>)}
       <button onClick={addLine} style={{...btnS,padding:'8px 16px',display:'flex',alignItems:'center',gap:6,marginTop:8}}><IconPlus/> Add Item</button>
     </div>
-
-    {stock.length>0&&<div style={{...crd,padding:0,overflow:'hidden',marginBottom:32}}>
-      <h3 style={{fontFamily:dsp,fontSize:16,color:T.accent,padding:'16px 20px 0',margin:0}}>All Stock — Minimum Pricing Reference</h3>
-      <p style={{color:T.textSecondary,fontSize:12,padding:'4px 20px 0',margin:0}}>Based on AVCO cost · 50% gross margin target</p>
-      <div style={{overflowX:'auto'}}>
-        <table style={{width:'100%',borderCollapse:'collapse',fontSize:13,marginTop:12}}>
-          <thead><tr style={{borderBottom:`1px solid ${T.border}`}}>
-            {['Category','Brand','In Stock','AVCO Cost/Unit','Min Sell/Unit (50%)','Min Sell ×10','Min Sell ×25'].map(h=><th key={h} style={_th}>{h}</th>)}
-          </tr></thead>
-          <tbody>{stock.map((s,i)=>{const minUnit=s.avgCost/0.5;return<tr key={i} style={{borderBottom:`1px solid ${T.borderLight}`}}>
-            <td style={_td}>{gn(categories,s.category_id)}</td>
-            <td style={_td}>{gn(brands,s.brand_id)}</td>
-            <td style={{..._td,fontWeight:600}}>{s.totalQty}</td>
-            <td style={{..._td,fontFamily:mono}}>{sym}{(s.avgCost*rate).toFixed(2)}</td>
-            <td style={{..._td,fontFamily:mono,fontWeight:700,color:T.accent}}>{sym}{(minUnit*rate).toFixed(2)}</td>
-            <td style={{..._td,fontFamily:mono,color:T.textSecondary}}>{sym}{(minUnit*10*rate).toFixed(2)}</td>
-            <td style={{..._td,fontFamily:mono,color:T.textSecondary}}>{sym}{(minUnit*25*rate).toFixed(2)}</td>
-          </tr>;})}</tbody>
-        </table>
-      </div>
-    </div>}
 
     {results.length>0&&<div style={{...crd,padding:0,overflow:'hidden'}}>
       <h3 style={{fontFamily:dsp,fontSize:16,color:T.accent,padding:'16px 20px 0',margin:0}}>Pricing Breakdown</h3>
