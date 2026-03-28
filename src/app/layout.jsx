@@ -3,14 +3,13 @@ import './globals.css';
 export const metadata = {
   title: 'Retro Revival — Business Manager',
   description: 'Inventory, dispatch & finance tracking for Retro Revival',
-  viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
-  manifest: '/manifest.json',
+};
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
   themeColor: '#2D3B35',
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: 'black-translucent',
-    title: 'Retro Revival',
-  },
 };
 
 export default function RootLayout({ children }) {
