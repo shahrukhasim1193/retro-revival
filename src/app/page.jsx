@@ -527,17 +527,19 @@ function FinanceTab({supabase,dispatches,expenses,salesChannels,categories,brand
       const payoutDateMatch=allText.match(/Payout date\s*([\d]+\s+\w+\s+\d{4})/i);const payoutTotalMatch=allText.match(/Payout balance\s*([\d,.]+)\s*GBP/i);
       const payoutDate=payoutDateMatch?payoutDateMatch[1]:'Unknown';const payoutTotal=payoutTotalMatch?parseFloat(payoutTotalMatch[1].replace(',','')):0;
 
-      // Find all order blocks in the detail section - split by ORDER headers
-      const orderPattern=/(\d{5,6}\/\d{2})/g;const allOrderNums=[...new Set([...allText.matchAll(orderPattern)].map(m=>m[1]))];
+      // Find all order blocks in the DETAIL section (not summary)
+      const detailStart=allText.indexOf('Order Level Details');
+      const detailText=detailStart>=0?allText.substring(detailStart):allText;
+      const orderPattern=/(\d{5,6}\/\d{2})/g;const allOrderNums=[...new Set([...detailText.matchAll(orderPattern)].map(m=>m[1]))];
 
-      // Parse each order by finding its specific block between consecutive order headers
+      // Parse each order by finding its specific block in the detail section
       const orders=[];
       for(const ordNum of allOrderNums){
         if(orders.find(o=>o.orderNumber===ordNum))continue;
         const escOrd=ordNum.replace('/','\\\/');
-        // Find the section for THIS order - from order number to Balance
+        // Find the section for THIS order - from order number to Balance in DETAIL text
         const blockRegex=new RegExp(escOrd+'[\\s\\S]*?Balance\\s+([\\-]?[\\d,.]+)');
-        const blockMatch=allText.match(blockRegex);
+        const blockMatch=detailText.match(blockRegex);
         if(!blockMatch)continue;
         const block=blockMatch[0]; // This is the scoped block for this order
 
