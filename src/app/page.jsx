@@ -246,7 +246,7 @@ function OrdersTab({supabase,user,categories,brands,salesChannels,procurements,d
 
     {/* Order List */}
     <div style={{...crd,padding:0,overflow:'hidden'}}>
-      <div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}><thead><tr style={{borderBottom:`1px solid ${T.border}`}}>{['Date','Order ID','Status','Channel','GMV','Items','Actions'].map(h=><th key={h} style={_th}>{h}</th>)}</tr></thead><tbody>
+      <div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}><thead><tr style={{borderBottom:`1px solid ${T.border}`}}>{['Date','Order ID','Status','Channel','GMV','Items','Notes','Actions'].map(h=><th key={h} style={_th}>{h}</th>)}</tr></thead><tbody>
         {filtered.length>0?filtered.map(d=>{const rev=parseFloat(d.selling_price_gbp)||0;const overdue=isOverdue(d);const canAdvance=d.order_status&&!['Dispatched','Cancelled'].includes(d.order_status);const canEdit=canAdvance;const nextSt=ORDER_STATUSES[ORDER_STATUSES.indexOf(d.order_status)+1];const itemDesc=(d.dispatch_items||[]).map(it=>`${gn(categories,it.category_id)}/${gn(brands,it.brand_id)} x${it.placed_qty||it.quantity}`).join(', ');
         return<tr key={d.id} style={{borderBottom:`1px solid ${T.borderLight}`,background:overdue?'rgba(179,58,58,0.04)':'transparent'}}>
           <td style={{..._td,color:T.textSecondary,fontSize:12}}>{new Date(d.placed_at||d.dispatched_at).toLocaleDateString('en-GB')}{overdue&&<div style={{color:T.red,fontSize:10,fontWeight:600}}>OVERDUE</div>}</td>
@@ -255,6 +255,7 @@ function OrdersTab({supabase,user,categories,brands,salesChannels,procurements,d
           <td style={{..._td,fontSize:12}}>{d.sales_channel_id?gn(salesChannels,d.sales_channel_id):'—'}</td>
           <td style={{..._td,fontFamily:mono}}>{sym}{(rev*rate).toFixed(2)}</td>
           <td style={{..._td,fontSize:11,color:T.textSecondary,maxWidth:150,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{itemDesc||'—'}</td>
+          <td style={{..._td,fontSize:11,color:T.textMuted,maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{d.notes||'—'}</td>
           <td style={_td}><div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
             {canAdvance&&nextSt&&<button onClick={()=>advanceStatus(d)} style={{background:T.accentBg,color:T.accent,border:`1px solid ${T.accentBorder}`,borderRadius:4,padding:'4px 10px',cursor:'pointer',fontSize:11,fontWeight:600,fontFamily:'inherit'}}>→ {nextSt}</button>}
             {canEdit&&<button onClick={()=>setEditOrder({...d,_sellPrice:''+(rev*rate).toFixed(2),_shipping:''+((parseFloat(d.shipping_cost_gbp)||0)*rate).toFixed(2),_commPct:''+parseFloat(d.commission_pct||0),_channelId:d.sales_channel_id||'',_notes:d.notes||''})} style={{background:'none',border:'none',color:T.accent,cursor:'pointer',opacity:0.6,padding:4}}><IconEdit/></button>}
@@ -262,7 +263,7 @@ function OrdersTab({supabase,user,categories,brands,salesChannels,procurements,d
             <button onClick={()=>deleteOrder(d)} style={{background:'none',border:'none',color:T.red,cursor:'pointer',opacity:0.4,padding:4}}><IconTrash/></button>
           </div></td>
         </tr>;}):
-        <tr><td colSpan={7} style={{..._td,textAlign:'center',color:T.textMuted,padding:30}}>No orders found</td></tr>}
+        <tr><td colSpan={8} style={{..._td,textAlign:'center',color:T.textMuted,padding:30}}>No orders found</td></tr>}
       </tbody></table></div>
     </div>
 
