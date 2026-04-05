@@ -560,7 +560,7 @@ function FinanceTab({supabase,dispatches,expenses,salesChannels,categories,brand
       }
 
       const matched=[];const unmatched=[];
-      for(const ord of orders){const disp=dispatches.find(d=>d.order_id===ord.orderNumber);if(disp)matched.push({...ord,dispatchId:disp.id,currentStatus:disp.payment_status||'Pending',currentShipping:parseFloat(disp.shipping_cost_gbp||0)});else unmatched.push(ord);}
+      for(const ord of orders){const disp=dispatches.find(d=>d.order_id===ord.orderNumber);if(disp)matched.push({...ord,dispatchId:disp.id,currentStatus:disp.payment_status||'Pending',currentShipping:parseFloat(disp.shipping_cost_gbp||0)||0});else unmatched.push(ord);}
       setPdfResult({filename:file.name,payoutDate,payoutTotal,orders,matched,unmatched});
     }catch(err){setPdfError(err.message||'Failed to parse PDF');}
     setPdfParsing(false);
@@ -568,7 +568,7 @@ function FinanceTab({supabase,dispatches,expenses,salesChannels,categories,brand
 
   async function applyPdfResults(){
     if(!pdfResult)return;setPdfApplying(true);
-    for(const m of pdfResult.matched){const updates={payment_status:m.isRefund?'Partial':'Paid',payout_amount_gbp:Math.max(0,m.balance)};if(m.refundAmt>0)updates.refund_amount_gbp=m.refundAmt;if(m.shippingAmt>0&&m.currentShipping===0)updates.shipping_cost_gbp=m.shippingAmt;await supabase.from('dispatches').update(updates).eq('id',m.dispatchId);}
+    for(const m of pdfResult.matched){const updates={payment_status:m.isRefund?'Partial':'Paid',payout_amount_gbp:Math.max(0,m.balance)};if(m.refundAmt>0)updates.refund_amount_gbp=m.refundAmt;if(m.shippingAmt>0&&(!m.currentShipping||m.currentShipping<=0))updates.shipping_cost_gbp=m.shippingAmt;await supabase.from('dispatches').update(updates).eq('id',m.dispatchId);}
     await loadAll();setPdfApplying(false);setPdfResult({...pdfResult,applied:true});
   }
 
