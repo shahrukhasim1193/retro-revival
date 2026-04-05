@@ -542,22 +542,25 @@ function FinanceTab({supabase,dispatches,expenses,salesChannels,categories,brand
         const block=blockMatch[0]; // This is the scoped block for this order
 
         const bpMatch=block.match(/Total Base Price\s+([\d,.]+)/);
+        const vbpMatch=block.match(/Vendor Base Price\s+([\d,.]+)/);
+        const shipMatch=block.match(/Shipping\s*\(?[^)]*\)?\s+[\-]?([\d,.]+)/);
         const commMatch=block.match(/Commission\s*\((\d+(?:\.\d+)?)%\)\s+[\-]?([\d,.]+)/);
         const refMatch=block.match(/Refund\s+[\-]?([\d,.]+)/);
         const balMatch=block.match(/Balance\s+([\-]?[\d,.]+)/);
 
-        if(!bpMatch||!balMatch)continue;
-        const basePrice=parseFloat(bpMatch[1].replace(',',''));
+        if(!balMatch||(! bpMatch&&!vbpMatch))continue;
+        const basePrice=vbpMatch?parseFloat(vbpMatch[1].replace(',','')):parseFloat(bpMatch[1].replace(',',''));
+        const shippingAmt=shipMatch?parseFloat(shipMatch[1].replace(',','')):0;
         const commPct2=commMatch?parseFloat(commMatch[1]):0;
         const commAmt2=commMatch?parseFloat(commMatch[2].replace(',','')):0;
         const refundAmt=refMatch?parseFloat(refMatch[1].replace(',','')):0;
         const balance=parseFloat(balMatch[1].replace(',',''));
 
-        orders.push({orderNumber:ordNum,basePrice,commPct:commPct2,commAmt:commAmt2,refundAmt,balance,isRefund:balance<0});
+        orders.push({orderNumber:ordNum,basePrice,shippingAmt,commPct:commPct2,commAmt:commAmt2,refundAmt,balance,isRefund:balance<0});
       }
 
       const matched=[];const unmatched=[];
-      for(const ord of orders){const disp=dispatches.find(d=>d.order_id===ord.orderNumber);if(disp)matched.push({...ord,dispatchId:disp.id,currentStatus:disp.payment_status||'Pending'});else unmatched.push(ord);}
+      for(const ord of orders){const disp=dispatches.find(d=>d.order_id===ord.orderNumber);if(disp)matched.push({...ord,dispatchId:disp.id,currentStatus:disp.payment_status||'Pending',currentShipping:parseFloat(disp.shipping_cost_gbp||0)});else unmatched.push(ord);}
       setPdfResult({filename:file.name,payoutDate,payoutTotal,orders,matched,unmatched});
     }catch(err){setPdfError(err.message||'Failed to parse PDF');}
     setPdfParsing(false);
@@ -565,7 +568,7 @@ function FinanceTab({supabase,dispatches,expenses,salesChannels,categories,brand
 
   async function applyPdfResults(){
     if(!pdfResult)return;setPdfApplying(true);
-    for(const m of pdfResult.matched){const updates={payment_status:m.isRefund?'Partial':'Paid',payout_amount_gbp:Math.max(0,m.balance)};if(m.refundAmt>0)updates.refund_amount_gbp=m.refundAmt;await supabase.from('dispatches').update(updates).eq('id',m.dispatchId);}
+    for(const m of pdfResult.matched){const updates={payment_status:m.isRefund?'Partial':'Paid',payout_amount_gbp:Math.max(0,m.balance)};if(m.refundAmt>0)updates.refund_amount_gbp=m.refundAmt;if(m.shippingAmt>0&&m.currentShipping===0)updates.shipping_cost_gbp=m.shippingAmt;await supabase.from('dispatches').update(updates).eq('id',m.dispatchId);}
     await loadAll();setPdfApplying(false);setPdfResult({...pdfResult,applied:true});
   }
 
@@ -642,7 +645,7 @@ function FinanceTab({supabase,dispatches,expenses,salesChannels,categories,brand
           {pdfResult.unmatched.length>0&&<div style={{...crd,borderColor:T.amberBorder,background:T.amberBg}}><div style={{fontSize:28,fontWeight:700,fontFamily:dsp,color:T.amber}}>{pdfResult.unmatched.length}</div><div style={{fontSize:13,color:T.textSecondary}}>Unmatched</div></div>}
         </div>
         {pdfResult.unmatched.length>0&&<div style={{background:T.amberBg,border:`1px solid ${T.amberBorder}`,borderRadius:10,padding:'14px 18px',marginBottom:16,fontSize:13}}><div style={{fontWeight:700,color:T.amber,marginBottom:6}}>Unmatched (not blocking import)</div><div style={{color:T.textSecondary}}>Order IDs not in your system: <strong>{pdfResult.unmatched.map(u=>u.orderNumber).join(', ')}</strong></div></div>}
-        {pdfResult.matched.length>0&&<div style={{...crd,padding:0,overflow:'hidden',marginBottom:16}}><h4 style={{padding:'14px 20px 0',margin:0,fontFamily:dsp,fontSize:14,color:T.accent}}>Matched Orders</h4><div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontSize:12,marginTop:8}}><thead><tr style={{borderBottom:`1px solid ${T.border}`}}>{['Order','Base Price','Comm','Refund','Balance','Current','New'].map(h=><th key={h} style={{..._th,fontSize:10}}>{h}</th>)}</tr></thead><tbody>{pdfResult.matched.map((m,i)=><tr key={i} style={{borderBottom:`1px solid ${T.borderLight}`}}><td style={{..._td,fontFamily:mono,fontSize:11}}>{m.orderNumber}</td><td style={{..._td,fontFamily:mono}}>{sym}{(m.basePrice*rate).toFixed(2)}</td><td style={{..._td,fontFamily:mono,color:T.textSecondary}}>({m.commPct}%) {sym}{(m.commAmt*rate).toFixed(2)}</td><td style={{..._td,fontFamily:mono,color:m.refundAmt>0?T.red:T.textMuted}}>{m.refundAmt>0?`${sym}${(m.refundAmt*rate).toFixed(2)}`:'—'}</td><td style={{..._td,fontFamily:mono,fontWeight:600,color:m.balance>=0?T.green:T.red}}>{sym}{(m.balance*rate).toFixed(2)}</td><td style={{..._td,fontSize:11,color:T.textMuted}}>{m.currentStatus}</td><td style={{..._td,fontSize:11,fontWeight:600,color:m.isRefund?T.amber:T.green}}>{m.isRefund?'Partial':'Paid'}</td></tr>)}</tbody></table></div></div>}
+        {pdfResult.matched.length>0&&<div style={{...crd,padding:0,overflow:'hidden',marginBottom:16}}><h4 style={{padding:'14px 20px 0',margin:0,fontFamily:dsp,fontSize:14,color:T.accent}}>Matched Orders</h4><div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontSize:12,marginTop:8}}><thead><tr style={{borderBottom:`1px solid ${T.border}`}}>{['Order','Base Price','Ship','Comm','Refund','Balance','Current','New'].map(h=><th key={h} style={{..._th,fontSize:10}}>{h}</th>)}</tr></thead><tbody>{pdfResult.matched.map((m,i)=><tr key={i} style={{borderBottom:`1px solid ${T.borderLight}`}}><td style={{..._td,fontFamily:mono,fontSize:11}}>{m.orderNumber}</td><td style={{..._td,fontFamily:mono}}>{sym}{(m.basePrice*rate).toFixed(2)}</td><td style={{..._td,fontFamily:mono,color:m.shippingAmt>0?T.amber:T.textMuted}}>{m.shippingAmt>0?`${sym}${(m.shippingAmt*rate).toFixed(2)}`:'—'}</td><td style={{..._td,fontFamily:mono,color:T.textSecondary}}>({m.commPct}%) {sym}{(m.commAmt*rate).toFixed(2)}</td><td style={{..._td,fontFamily:mono,color:m.refundAmt>0?T.red:T.textMuted}}>{m.refundAmt>0?`${sym}${(m.refundAmt*rate).toFixed(2)}`:'—'}</td><td style={{..._td,fontFamily:mono,fontWeight:600,color:m.balance>=0?T.green:T.red}}>{sym}{(m.balance*rate).toFixed(2)}</td><td style={{..._td,fontSize:11,color:T.textMuted}}>{m.currentStatus}</td><td style={{..._td,fontSize:11,fontWeight:600,color:m.isRefund?T.amber:T.green}}>{m.isRefund?'Partial':'Paid'}</td></tr>)}</tbody></table></div></div>}
         {!pdfResult.applied&&pdfResult.matched.length>0&&<button onClick={applyPdfResults} disabled={pdfApplying} style={{...btnP,opacity:pdfApplying?0.6:1}}>{pdfApplying?'Applying...':'Apply Payment Updates'}</button>}
         {pdfResult.applied&&<div style={{background:'rgba(61,122,74,0.08)',border:'1px solid rgba(61,122,74,0.3)',borderRadius:10,padding:'14px 18px',color:T.green,fontSize:14,fontWeight:600}}>Payment statuses updated for {pdfResult.matched.length} orders</div>}
       </div>}
