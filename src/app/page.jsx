@@ -197,15 +197,13 @@ function OrdersTab({supabase,user,categories,brands,salesChannels,procurements,d
     setSaving(false);
   }
 
-  async function advanceStatus(d){
-    const idx=ORDER_STATUSES.indexOf(d.order_status);if(idx<0||idx>=ORDER_STATUSES.length-2)return;
-    if(ORDER_STATUSES[idx+1]==='Dispatched'){setDispatchModal(d);return;}
-    const nextStatus=ORDER_STATUSES[idx+1];const now=new Date().toISOString();
-    const updates={order_status:nextStatus};
-    // Auto-fill skipped timestamps
+  async function advanceStatus(d,targetStatus){
+    if(targetStatus==='Dispatched'){setDispatchModal(d);return;}
+    const targetIdx=ORDER_STATUSES.indexOf(targetStatus);const now=new Date().toISOString();
+    const updates={order_status:targetStatus};
+    // Auto-fill all skipped timestamps up to target
     const tsFields=['placed_at','qa_at','washing_at','ready_at'];
-    for(let i2=0;i2<=idx+1;i2++){if(!d[tsFields[i2]])updates[tsFields[i2]]=now;}
-    updates[tsFields[idx+1]]=now;
+    for(let i2=0;i2<=targetIdx&&i2<tsFields.length;i2++){if(!d[tsFields[i2]])updates[tsFields[i2]]=now;}
     await supabase.from('dispatches').update(updates).eq('id',d.id);await loadAll();
   }
 
@@ -247,7 +245,7 @@ function OrdersTab({supabase,user,categories,brands,salesChannels,procurements,d
     {/* Order List */}
     <div style={{...crd,padding:0,overflow:'hidden'}}>
       <div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}><thead><tr style={{borderBottom:`1px solid ${T.border}`}}>{['Date','Order ID','Status','Channel','GMV','Items','Notes','Actions'].map(h=><th key={h} style={_th}>{h}</th>)}</tr></thead><tbody>
-        {filtered.length>0?filtered.map(d=>{const rev=parseFloat(d.selling_price_gbp)||0;const overdue=isOverdue(d);const canAdvance=d.order_status&&!['Dispatched','Cancelled'].includes(d.order_status);const canEdit=canAdvance;const nextSt=ORDER_STATUSES[ORDER_STATUSES.indexOf(d.order_status)+1];const itemDesc=(d.dispatch_items||[]).map(it=>`${gn(categories,it.category_id)}/${gn(brands,it.brand_id)} x${it.placed_qty||it.quantity}`).join(', ');
+        {filtered.length>0?filtered.map(d=>{const rev=parseFloat(d.selling_price_gbp)||0;const overdue=isOverdue(d);const canAdvance=d.order_status&&!['Dispatched','Cancelled'].includes(d.order_status);const canEdit=canAdvance;const itemDesc=(d.dispatch_items||[]).map(it=>`${gn(categories,it.category_id)}/${gn(brands,it.brand_id)} x${it.placed_qty||it.quantity}`).join(', ');
         return<tr key={d.id} style={{borderBottom:`1px solid ${T.borderLight}`,background:overdue?'rgba(179,58,58,0.04)':'transparent'}}>
           <td style={{..._td,color:T.textSecondary,fontSize:12}}>{new Date(d.placed_at||d.dispatched_at).toLocaleDateString('en-GB')}{overdue&&<div style={{color:T.red,fontSize:10,fontWeight:600}}>OVERDUE</div>}</td>
           <td style={_td}><button onClick={()=>setViewOrder(d)} style={{background:'none',border:'none',color:T.accent,cursor:'pointer',fontFamily:mono,fontSize:12,padding:0,textDecoration:'underline',fontWeight:600}}>{d.order_id}</button></td>
@@ -257,7 +255,7 @@ function OrdersTab({supabase,user,categories,brands,salesChannels,procurements,d
           <td style={{..._td,fontSize:11,color:T.textSecondary,maxWidth:150,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{itemDesc||'—'}</td>
           <td style={{..._td,fontSize:11,color:T.textMuted,maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{d.notes||'—'}</td>
           <td style={_td}><div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-            {canAdvance&&nextSt&&<button onClick={()=>advanceStatus(d)} style={{background:T.accentBg,color:T.accent,border:`1px solid ${T.accentBorder}`,borderRadius:4,padding:'4px 10px',cursor:'pointer',fontSize:11,fontWeight:600,fontFamily:'inherit'}}>→ {nextSt}</button>}
+            {canAdvance&&<select onChange={e=>{if(e.target.value)advanceStatus(d,e.target.value);e.target.value='';}} defaultValue="" style={{background:T.accentBg,color:T.accent,border:`1px solid ${T.accentBorder}`,borderRadius:4,padding:'4px 8px',cursor:'pointer',fontSize:11,fontWeight:600,fontFamily:'inherit'}}><option value="" disabled>Move to...</option>{ORDER_STATUSES.slice(ORDER_STATUSES.indexOf(d.order_status)+1).map(s=><option key={s} value={s}>{s}</option>)}</select>}
             {canEdit&&<button onClick={()=>setEditOrder({...d,_sellPrice:''+(rev*rate).toFixed(2),_shipping:''+((parseFloat(d.shipping_cost_gbp)||0)*rate).toFixed(2),_commPct:''+parseFloat(d.commission_pct||0),_channelId:d.sales_channel_id||'',_notes:d.notes||''})} style={{background:'none',border:'none',color:T.accent,cursor:'pointer',opacity:0.6,padding:4}}><IconEdit/></button>}
             {canAdvance&&<button onClick={()=>cancelOrder(d)} style={{background:'none',border:'none',color:T.red,cursor:'pointer',opacity:0.5,padding:4,fontSize:10}}>Cancel</button>}
             <button onClick={()=>deleteOrder(d)} style={{background:'none',border:'none',color:T.red,cursor:'pointer',opacity:0.4,padding:4}}><IconTrash/></button>
