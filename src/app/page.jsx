@@ -176,7 +176,7 @@ function OrdersTab({supabase,user,categories,brands,salesChannels,procurements,d
   const defaultComm=parseFloat(settings.default_commission_pct||'0');
   const defaultChannel=salesChannels.find(c=>c.is_default)?.id||'';
   const stock=getAvailableStock(procurements);const gn=(list,id)=>list.find(i=>i.id===id)?.name||'—';
-  const [statusFilter,setStatusFilter]=useState('Active');const [searchQ,setSearchQ]=useState('');const [searchQ,setSearchQ]=useState('');
+  const [statusFilter,setStatusFilter]=useState('Active');const [searchQ,setSearchQ]=useState('');
   const [showNew,setShowNew]=useState(false);const [viewOrder,setViewOrder]=useState(null);const [editOrder,setEditOrder]=useState(null);const [dispatchModal,setDispatchModal]=useState(null);
   const [orderId,setOrderId]=useState('');const [orderDate,setOrderDate]=useState(new Date().toISOString().slice(0,10));const [sellPrice,setSellPrice]=useState('');
   const [shipping,setShipping]=useState('');const [commission,setCommission]=useState(defaultComm.toString());const [channelId,setChannelId]=useState(defaultChannel);const [notes,setNotes]=useState('');
