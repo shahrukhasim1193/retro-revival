@@ -78,6 +78,9 @@ export default function AppPage(){
     if(c7.data){const s={};c7.data.forEach(r=>s[r.key]=r.value);setSettings(s);}
   },[]);
   async function handleSignOut(){await supabase.auth.signOut();window.location.href='/login';}
+  const [showBanner,setShowBanner]=useState(false);
+  useEffect(()=>{const BANNER_ID='rr-mubarak-apr';const BANNER_EXPIRY='2026-04-08T10:00:00Z';const now=new Date();if(now>new Date(BANNER_EXPIRY))return;try{const dismissed=localStorage.getItem(BANNER_ID);if(!dismissed)setShowBanner(true);}catch{setShowBanner(true);}},[]);
+  function dismissBanner(){setShowBanner(false);try{localStorage.setItem('rr-mubarak-apr','1');}catch{}}
   if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:T.bg,color:T.accent,fontFamily:"'Playfair Display', serif",fontSize:20}}>Loading...</div>;
 
   const navItems=[{id:'dashboard',label:'Dashboard',icon:<IconDashboard/>},{id:'orders',label:'Orders',icon:<IconClip/>},{id:'inventory',label:'Inventory',icon:<IconBox/>},{id:'procurement',label:'Procurement',icon:<IconPackage/>},{id:'expenses',label:'Expenses',icon:<IconExpense/>},{id:'calculator',label:'Price Calc',icon:<IconCalc/>},{id:'finance',label:'Finance',icon:<IconChart/>},{id:'settings',label:'Settings',icon:<IconSettings/>}];
@@ -100,6 +103,7 @@ export default function AppPage(){
       </aside>
       <main style={{flex:1,overflow:'auto',background:T.bg}}>
         {isMobile&&<div style={{padding:'12px 16px',borderBottom:`1px solid ${T.border}`,display:'flex',alignItems:'center',gap:12}}><button onClick={()=>setSidebarOpen(true)} style={{background:'none',border:'none',cursor:'pointer',padding:4,color:T.accent}}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button><img src={LOGO_SRC} alt="RR" style={{width:28,height:28,borderRadius:6,objectFit:'cover'}}/><span style={{fontFamily:dsp,fontWeight:700,fontSize:15,color:T.accent}}>Retro Revival</span></div>}
+        {showBanner&&<div style={{background:`linear-gradient(135deg, ${T.accent}, ${T.accentDark})`,color:'#fff',padding:'20px 24px',display:'flex',alignItems:'center',gap:12}}><div style={{flex:1,textAlign:'center'}}><div style={{fontWeight:700,fontSize:22,fontFamily:dsp,marginBottom:4}}>MUBARAK HO GANDU</div><div style={{fontSize:14,opacity:0.9,fontWeight:600}}>WHAT A FUCKING MONTH!</div></div><button onClick={dismissBanner} style={{background:'rgba(255,255,255,0.2)',border:'none',color:'#fff',borderRadius:6,padding:'6px 12px',cursor:'pointer',fontWeight:600,fontFamily:'inherit',fontSize:12,flexShrink:0}}>x</button></div>}
         <div style={{maxWidth:1100,margin:'0 auto',padding:isMobile?'20px 16px':'32px 36px'}} className="fade-in" key={activeTab}>
           {activeTab==='dashboard'&&<DashboardTab {...sp}/>}{activeTab==='orders'&&<OrdersTab {...sp}/>}{activeTab==='inventory'&&<InventoryTab {...sp}/>}{activeTab==='procurement'&&<ProcurementTab {...sp}/>}{activeTab==='expenses'&&<ExpensesTab {...sp}/>}{activeTab==='calculator'&&<PriceCalcTab {...sp}/>}{activeTab==='finance'&&<FinanceTab {...sp}/>}{activeTab==='settings'&&<SettingsTab {...sp}/>}
         </div>
