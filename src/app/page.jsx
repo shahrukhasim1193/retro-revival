@@ -176,14 +176,15 @@ function OrdersTab({supabase,user,categories,brands,salesChannels,procurements,d
   const defaultComm=parseFloat(settings.default_commission_pct||'0');
   const defaultChannel=salesChannels.find(c=>c.is_default)?.id||'';
   const stock=getAvailableStock(procurements);const gn=(list,id)=>list.find(i=>i.id===id)?.name||'—';
-  const [statusFilter,setStatusFilter]=useState('Active');
+  const [statusFilter,setStatusFilter]=useState('Active');const [searchQ,setSearchQ]=useState('');const [searchQ,setSearchQ]=useState('');
   const [showNew,setShowNew]=useState(false);const [viewOrder,setViewOrder]=useState(null);const [editOrder,setEditOrder]=useState(null);const [dispatchModal,setDispatchModal]=useState(null);
   const [orderId,setOrderId]=useState('');const [orderDate,setOrderDate]=useState(new Date().toISOString().slice(0,10));const [sellPrice,setSellPrice]=useState('');
   const [shipping,setShipping]=useState('');const [commission,setCommission]=useState(defaultComm.toString());const [channelId,setChannelId]=useState(defaultChannel);const [notes,setNotes]=useState('');
   const [items,setItems]=useState([{stockKey:'',qty:''}]);const [error,setError]=useState('');const [saving,setSaving]=useState(false);
   const [marginAlert,setMarginAlert]=useState({open:false,margin:0});
 
-  const filtered=statusFilter==='Active'?dispatches.filter(d=>d.order_status&&!['Dispatched','Cancelled'].includes(d.order_status)):statusFilter==='All'?dispatches:dispatches.filter(d=>d.order_status===statusFilter);
+  const preFiltered=statusFilter==='Active'?dispatches.filter(d=>d.order_status&&!['Dispatched','Cancelled'].includes(d.order_status)):statusFilter==='All'?dispatches:dispatches.filter(d=>d.order_status===statusFilter);
+  const filtered=searchQ.trim()?preFiltered.filter(d=>{const q=searchQ.toLowerCase();return(d.order_id||'').toLowerCase().includes(q)||(d.notes||'').toLowerCase().includes(q);}):preFiltered;
   const spVal=parseFloat(sellPrice)||0;const shVal=parseFloat(shipping)||0;const commPct=parseFloat(commission)||0;const commBase=Math.max(0,spVal-shVal);const commAmt=commBase*commPct/100;
 
   function addItem(){setItems([...items,{stockKey:'',qty:''}]);}function removeItem(i){setItems(items.filter((_,idx)=>idx!==i));}function updateItem(i,f,v){const n=[...items];n[i]={...n[i],[f]:v};setItems(n);}
@@ -240,7 +241,7 @@ function OrdersTab({supabase,user,categories,brands,salesChannels,procurements,d
 
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:24,flexWrap:'wrap',gap:12}}>
       <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>{['Active','Placed','QA','Washing','Ready','Dispatched','Cancelled','All'].map(s=><button key={s} onClick={()=>setStatusFilter(s)} style={{background:statusFilter===s?T.accent:'transparent',color:statusFilter===s?'#fff':T.textSecondary,border:`1px solid ${statusFilter===s?T.accent:T.border}`,borderRadius:6,padding:'6px 14px',cursor:'pointer',fontWeight:600,fontFamily:'inherit',fontSize:12}}>{s}</button>)}</div>
-      <button onClick={()=>setShowNew(true)} style={{...btnP,padding:'10px 20px',display:'flex',alignItems:'center',gap:8}}><IconPlus/> New Order</button>
+      <div style={{display:'flex',gap:8,alignItems:'center'}}><input value={searchQ} onChange={e=>setSearchQ(e.target.value)} placeholder="Search orders..." style={{...inp,width:180,padding:'8px 12px',fontSize:13}}/><button onClick={()=>setShowNew(true)} style={{...btnP,padding:'10px 20px',display:'flex',alignItems:'center',gap:8}}><IconPlus/> New Order</button></div>
     </div>
 
     {/* Order List */}
