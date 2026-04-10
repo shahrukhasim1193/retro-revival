@@ -125,7 +125,7 @@ function DashboardTab({categories,brands,procurements,dispatches,expenses,rate,s
 
   const historicalGMV=[{label:'Jan',gmv:6170},{label:'Feb',gmv:5672}];
   const periods=getBillingPeriods(dispatches,expenses);
-  const periodGMVs=periods.map(p=>{const pD=dispatchedOrders.filter(d=>{const dt=new Date(d.dispatched_at);return dt>=p.start&&dt<=p.end;});const gmv=pD.reduce((s,d)=>s+(parseFloat(d.selling_price_gbp)||0),0);const ship=pD.reduce((s,d)=>s+(parseFloat(d.shipping_cost_gbp)||0),0);const comm=pD.reduce((s,d)=>{const r=parseFloat(d.selling_price_gbp)||0;const sh=parseFloat(d.shipping_cost_gbp)||0;const pc=parseFloat(d.commission_pct)||0;return s+Math.max(0,r-sh)*pc/100;},0);const cogs=pD.reduce((s,d)=>s+(d.dispatch_items||[]).reduce((ss,it)=>ss+it.quantity*parseFloat(it.unit_cost_gbp),0),0);const fE=(expenses||[]).filter(e=>{const dt=new Date(e.expense_date);return dt>=p.start&&dt<=p.end;});const directCosts=fE.filter(e=>e.category==='Direct Costs').reduce((s,e)=>s+parseFloat(e.amount_gbp),0);const opex=fE.filter(e=>e.category==='Opex').reduce((s,e)=>s+parseFloat(e.amount_gbp),0);const refunds=pD.reduce((s,d)=>s+(parseFloat(d.refund_amount_gbp)||0),0);const grossProfit=gmv-ship-comm-refunds-directCosts-cogs;const netProfit=grossProfit-opex;return{label:p.start.toLocaleDateString('en-GB',{month:'short'}),gmv,grossProfit,netProfit};});
+  const periodGMVs=periods.map(p=>{const pD=dispatchedOrders.filter(d=>{const dt=new Date(d.dispatched_at);return dt>=p.start&&dt<=p.end;});const gmv=pD.reduce((s,d)=>s+(parseFloat(d.dispatched_gmv_gbp)||parseFloat(d.selling_price_gbp)||0),0);const ship=pD.reduce((s,d)=>s+(parseFloat(d.shipping_cost_gbp)||0),0);const rrG=gmv-ship;const comm=pD.reduce((s,d)=>{const dg=parseFloat(d.dispatched_gmv_gbp)||parseFloat(d.selling_price_gbp)||0;const sh=parseFloat(d.shipping_cost_gbp)||0;const pc=parseFloat(d.commission_pct)||0;return s+(dg-sh)*pc/100;},0);const cogs=pD.reduce((s,d)=>s+(d.dispatch_items||[]).reduce((ss,it)=>ss+it.quantity*parseFloat(it.unit_cost_gbp),0),0);const fE=(expenses||[]).filter(e=>{const dt=new Date(e.expense_date);return dt>=p.start&&dt<=p.end;});const directCosts=fE.filter(e=>e.category==='Direct Costs').reduce((s,e)=>s+parseFloat(e.amount_gbp),0);const opex=fE.filter(e=>e.category==='Opex').reduce((s,e)=>s+parseFloat(e.amount_gbp),0);const refunds=pD.reduce((s,d)=>s+(parseFloat(d.refund_amount_gbp)||0),0);const nmv=rrG-comm;const grossProfit=nmv-refunds-directCosts-cogs;const netProfit=grossProfit-opex;return{label:p.start.toLocaleDateString('en-GB',{month:'short'}),gmv,grossProfit,netProfit};});
   const historicalLabels=new Set(historicalGMV.map(h=>h.label));const liveOnly=periodGMVs.filter(p=>!historicalLabels.has(p.label));
   const allPeriods=[...historicalGMV.map(h=>({...h,grossProfit:0,netProfit:0,isHistorical:true})),...liveOnly.map(p=>({...p,isHistorical:false}))];
   const currentP=periodGMVs.length>0?periodGMVs[periodGMVs.length-1]:null;
@@ -220,11 +220,14 @@ function OrdersTab({supabase,user,categories,brands,salesChannels,procurements,d
   async function finalizeDispatch(){
     if(!dispatchModal)return;setSaving(true);
     const dItems=(dispatchModal.dispatch_items||[]).map(it=>({dispatch_item_id:it.id,dispatched_qty:it._dispQty||it.placed_qty||it.quantity}));
+    const dispGMV=dispatchModal._dispGMV!==undefined?parseFloat(dispatchModal._dispGMV):(parseFloat(dispatchModal.selling_price_gbp)||0);
     const{error}=await supabase.rpc('finalize_dispatch',{p_dispatch_id:dispatchModal.id,p_dispatched_items:dItems});
     if(!error){
+      // Save dispatched GMV
+      await supabase.from('dispatches').update({dispatched_gmv_gbp:dispGMV}).eq('id',dispatchModal.id);
       // Check margin
       const totalCost=dItems.reduce((s,di)=>{const it=(dispatchModal.dispatch_items||[]).find(x=>x.id===di.dispatch_item_id);return s+(it?di.dispatched_qty*parseFloat(it.unit_cost_gbp):0);},0);
-      const rev=parseFloat(dispatchModal.selling_price_gbp)||0;const ship=parseFloat(dispatchModal.shipping_cost_gbp)||0;const comm=parseFloat(dispatchModal.commission_pct)||0;const commA2=Math.max(0,rev-ship)*comm/100;const net=rev-ship-commA2-totalCost;const margin=rev?(net/rev*100):0;
+      const rev=dispGMV;const ship=parseFloat(dispatchModal.shipping_cost_gbp)||0;const comm=parseFloat(dispatchModal.commission_pct)||0;const commA2=Math.max(0,rev-ship)*comm/100;const net=rev-ship-commA2-totalCost;const margin=rev?(net/rev*100):0;
       if(margin<35||margin>70)setMarginAlert({open:true,margin});
       setDispatchModal(null);await loadAll();
     }else{alert(error.message);}
@@ -233,13 +236,13 @@ function OrdersTab({supabase,user,categories,brands,salesChannels,procurements,d
 
   async function saveEditOrder(){
     if(!editOrder)return;setSaving(true);
-    await supabase.from('dispatches').update({order_id:editOrder.order_id,selling_price_gbp:parseFloat(editOrder._sellPrice),shipping_cost_gbp:parseFloat(editOrder._shipping||0),commission_pct:parseFloat(editOrder._commPct||0),sales_channel_id:editOrder._channelId||null,notes:editOrder._notes||null}).eq('id',editOrder.id);
+    await supabase.from('dispatches').update({order_id:editOrder.order_id,selling_price_gbp:parseFloat(editOrder._sellPrice),dispatched_gmv_gbp:parseFloat(editOrder._dispGMV||editOrder._sellPrice),shipping_cost_gbp:parseFloat(editOrder._shipping||0),commission_pct:parseFloat(editOrder._commPct||0),sales_channel_id:editOrder._channelId||null,notes:editOrder._notes||null}).eq('id',editOrder.id);
     setEditOrder(null);await loadAll();setSaving(false);
   }
 
   const statusColor=(s)=>s==='Placed'?T.accent:s==='QA'?T.amber:s==='Washing'?'#6B8DD6':s==='Ready'?'#3D7A4A':s==='Dispatched'?T.green:s==='Cancelled'?T.red:T.textMuted;
 
-  function exportOrders(){const gn2=(list,id)=>list.find(i=>i.id===id)?.name||'';const rows=filtered.map(d=>{const its=(d.dispatch_items||[]).map(it=>`${gn2(categories,it.category_id)}/${gn2(brands,it.brand_id)} x${it.dispatched_qty||it.placed_qty||it.quantity}`).join('; ');const rev=parseFloat(d.selling_price_gbp)||0;const ship=parseFloat(d.shipping_cost_gbp)||0;const comm=parseFloat(d.commission_pct)||0;const commAmt2=Math.max(0,rev-ship)*comm/100;const cogs2=(d.dispatch_items||[]).reduce((s,it)=>s+(it.dispatched_qty||it.quantity)*parseFloat(it.unit_cost_gbp),0);const ref=parseFloat(d.refund_amount_gbp||0);const net=rev-ship-commAmt2-cogs2-ref;return[new Date(d.placed_at||d.dispatched_at).toLocaleDateString('en-GB'),d.order_id,d.order_status,d.sales_channel_id?gn2(salesChannels,d.sales_channel_id):'',rev.toFixed(2),ship.toFixed(2),comm,commAmt2.toFixed(2),cogs2.toFixed(2),ref.toFixed(2),net.toFixed(2),d.payment_status||'Pending',its,d.notes||'',d.logged_by_name||''];});exportCSV(`orders-${statusFilter.toLowerCase()}-${new Date().toISOString().slice(0,10)}.csv`,['Date','Order ID','Status','Channel','GMV','Shipping','Comm %','Commission','COGS','Refund','Net P&L','Payment','Items','Notes','Logged By'],rows);}
+  function exportOrders(){const gn2=(list,id)=>list.find(i=>i.id===id)?.name||'';const rows=filtered.map(d=>{const its=(d.dispatch_items||[]).map(it=>`${gn2(categories,it.category_id)}/${gn2(brands,it.brand_id)} x${it.dispatched_qty||it.placed_qty||it.quantity}`).join('; ');const rev=parseFloat(d.selling_price_gbp)||0;const dg=parseFloat(d.dispatched_gmv_gbp)||rev;const ship=parseFloat(d.shipping_cost_gbp)||0;const rrG=dg-ship;const comm=parseFloat(d.commission_pct)||0;const commAmt2=rrG*comm/100;const nmvO=rrG-commAmt2;const cogs2=(d.dispatch_items||[]).reduce((s,it)=>s+(it.dispatched_qty||it.quantity)*parseFloat(it.unit_cost_gbp),0);const ref=parseFloat(d.refund_amount_gbp||0);const net=nmvO-ref-cogs2;return[new Date(d.placed_at||d.dispatched_at).toLocaleDateString('en-GB'),d.order_id,d.order_status,d.sales_channel_id?gn2(salesChannels,d.sales_channel_id):'',rev.toFixed(2),dg.toFixed(2),ship.toFixed(2),rrG.toFixed(2),comm,commAmt2.toFixed(2),nmvO.toFixed(2),cogs2.toFixed(2),ref.toFixed(2),net.toFixed(2),d.payment_status||'Pending',its,d.notes||'',d.logged_by_name||''];});exportCSV(`orders-${statusFilter.toLowerCase()}-${new Date().toISOString().slice(0,10)}.csv`,['Date','Order ID','Status','Channel','Order GMV','Dispatched GMV','Shipping','RR GMV','Comm %','Commission','NMV','COGS','Refund','Net P&L','Payment','Items','Notes','Logged By'],rows);}
 
   return(<div>
     <h1 style={{fontFamily:dsp,fontSize:28,fontWeight:700,color:T.accent,margin:'0 0 6px'}}>Orders</h1>
@@ -265,7 +268,7 @@ function OrdersTab({supabase,user,categories,brands,salesChannels,procurements,d
           <td style={{..._td,fontSize:11,color:T.textMuted,maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{d.notes||'—'}</td>
           <td style={_td}><div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
             {canAdvance&&<select onChange={e=>{if(e.target.value)advanceStatus(d,e.target.value);e.target.value='';}} defaultValue="" style={{background:T.accentBg,color:T.accent,border:`1px solid ${T.accentBorder}`,borderRadius:4,padding:'4px 8px',cursor:'pointer',fontSize:11,fontWeight:600,fontFamily:'inherit'}}><option value="" disabled>Move to...</option>{ORDER_STATUSES.slice(ORDER_STATUSES.indexOf(d.order_status)+1).map(s=><option key={s} value={s}>{s}</option>)}</select>}
-            {canEdit&&<button onClick={()=>setEditOrder({...d,_sellPrice:''+rev.toFixed(2),_shipping:''+((parseFloat(d.shipping_cost_gbp)||0)).toFixed(2),_commPct:''+parseFloat(d.commission_pct||0),_channelId:d.sales_channel_id||'',_notes:d.notes||''})} style={{background:'none',border:'none',color:T.accent,cursor:'pointer',opacity:0.6,padding:4}}><IconEdit/></button>}
+            {canEdit&&<button onClick={()=>setEditOrder({...d,_sellPrice:''+rev.toFixed(2),_dispGMV:''+((parseFloat(d.dispatched_gmv_gbp)||rev)).toFixed(2),_shipping:''+((parseFloat(d.shipping_cost_gbp)||0)).toFixed(2),_commPct:''+parseFloat(d.commission_pct||0),_channelId:d.sales_channel_id||'',_notes:d.notes||''})} style={{background:'none',border:'none',color:T.accent,cursor:'pointer',opacity:0.6,padding:4}}><IconEdit/></button>}
             {canAdvance&&<button onClick={()=>cancelOrder(d)} style={{background:'none',border:'none',color:T.red,cursor:'pointer',opacity:0.5,padding:4,fontSize:10}}>Cancel</button>}
             <button onClick={()=>deleteOrder(d)} style={{background:'none',border:'none',color:T.red,cursor:'pointer',opacity:0.4,padding:4}}><IconTrash/></button>
           </div></td>
@@ -303,7 +306,8 @@ function OrdersTab({supabase,user,categories,brands,salesChannels,procurements,d
       {editOrder&&<div>
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))',gap:16,marginBottom:16}}>
           <div><label style={lbl}>Order ID</label><input value={editOrder.order_id} onChange={e=>setEditOrder({...editOrder,order_id:e.target.value})} style={inp}/></div>
-          <div><label style={lbl}>GMV (£ GBP)</label><input type="number" step="0.01" value={editOrder._sellPrice} onChange={e=>setEditOrder({...editOrder,_sellPrice:e.target.value})} style={inp}/></div>
+          <div><label style={lbl}>Order GMV (£ GBP)</label><input type="number" step="0.01" value={editOrder._sellPrice} onChange={e=>setEditOrder({...editOrder,_sellPrice:e.target.value})} style={inp}/></div>
+          <div><label style={lbl}>Dispatched GMV (£ GBP)</label><input type="number" step="0.01" value={editOrder._dispGMV} onChange={e=>setEditOrder({...editOrder,_dispGMV:e.target.value})} style={inp}/></div>
         </div>
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))',gap:16,marginBottom:16}}>
           <div><label style={lbl}>Shipping (£ GBP)</label><input type="number" step="0.01" value={editOrder._shipping} onChange={e=>setEditOrder({...editOrder,_shipping:e.target.value})} style={inp}/></div>
@@ -318,14 +322,15 @@ function OrdersTab({supabase,user,categories,brands,salesChannels,procurements,d
     {/* Dispatch Confirmation Modal */}
     <Modal open={!!dispatchModal} onClose={()=>setDispatchModal(null)} title={`Dispatch Order ${dispatchModal?.order_id}`} wide>
       {dispatchModal&&<div>
-        <p style={{color:T.textSecondary,fontSize:13,marginBottom:16}}>Confirm dispatch quantities. You can reduce but not increase quantities. Reduced items return to available stock.</p>
-        <table style={{width:'100%',borderCollapse:'collapse',fontSize:13,marginBottom:20}}><thead><tr style={{borderBottom:`1px solid ${T.border}`}}>{['Item','Placed Qty','Dispatch Qty'].map(h=><th key={h} style={_th}>{h}</th>)}</tr></thead><tbody>
+        <p style={{color:T.textSecondary,fontSize:13,marginBottom:16}}>Confirm dispatch quantities and dispatched GMV. You can reduce but not increase quantities.</p>
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:13,marginBottom:16}}><thead><tr style={{borderBottom:`1px solid ${T.border}`}}>{['Item','Placed Qty','Dispatch Qty'].map(h=><th key={h} style={_th}>{h}</th>)}</tr></thead><tbody>
           {(dispatchModal.dispatch_items||[]).map((it,i)=>{const placedQ=it.placed_qty||it.quantity;const dispQ=it._dispQty!==undefined?it._dispQty:placedQ;return<tr key={it.id} style={{borderBottom:`1px solid ${T.borderLight}`}}>
             <td style={_td}>{gn(categories,it.category_id)} / {gn(brands,it.brand_id)}</td>
             <td style={{..._td,fontFamily:mono}}>{placedQ}</td>
             <td style={_td}><input type="number" min="0" max={placedQ} value={dispQ} onChange={e=>{const newItems=[...(dispatchModal.dispatch_items||[])];newItems[i]={...newItems[i],_dispQty:Math.min(placedQ,Math.max(0,parseInt(e.target.value)||0))};setDispatchModal({...dispatchModal,dispatch_items:newItems});}} style={{...inp,width:80,textAlign:'center'}}/></td>
           </tr>;})}
         </tbody></table>
+        <div style={{marginBottom:16}}><label style={lbl}>Dispatched GMV (£ GBP) <span style={{opacity:0.5,fontWeight:400,textTransform:'none'}}>— defaults to order GMV, adjust if partial fulfillment</span></label><input type="number" step="0.01" min="0" value={dispatchModal._dispGMV!==undefined?dispatchModal._dispGMV:(parseFloat(dispatchModal.selling_price_gbp)||0)} onChange={e=>setDispatchModal({...dispatchModal,_dispGMV:e.target.value})} style={inp}/></div>
         {(()=>{const totalPlaced=(dispatchModal.dispatch_items||[]).reduce((s,it)=>s+(it.placed_qty||it.quantity),0);const totalDisp=(dispatchModal.dispatch_items||[]).reduce((s,it)=>s+(it._dispQty!==undefined?it._dispQty:(it.placed_qty||it.quantity)),0);const unfulfilled=totalPlaced-totalDisp;return unfulfilled>0?<div style={{background:T.amberBg,border:`1px solid ${T.amberBorder}`,borderRadius:8,padding:'10px 14px',marginBottom:16,fontSize:13,color:T.amber}}><strong>{unfulfilled} items</strong> will be returned to available stock as unfulfilled.</div>:null;})()}
         <button onClick={finalizeDispatch} disabled={saving} style={{...btnP,opacity:saving?0.6:1}}>{saving?'Dispatching...':'Confirm Dispatch'}</button>
       </div>}
@@ -333,7 +338,7 @@ function OrdersTab({supabase,user,categories,brands,salesChannels,procurements,d
 
     {/* View Order Detail Modal */}
     <Modal open={!!viewOrder} onClose={()=>setViewOrder(null)} title={viewOrder?`Order ${viewOrder.order_id}`:''} wide>
-      {viewOrder&&(()=>{const rev=parseFloat(viewOrder.selling_price_gbp)||0;const ship=parseFloat(viewOrder.shipping_cost_gbp)||0;const comm=parseFloat(viewOrder.commission_pct)||0;const commBase2=Math.max(0,rev-ship);const commAmt2=commBase2*comm/100;const its=viewOrder.dispatch_items||[];const orderCogs=its.reduce((s,it)=>s+(it.dispatched_qty||it.quantity)*parseFloat(it.unit_cost_gbp),0);const refund=parseFloat(viewOrder.refund_amount_gbp||0);const net=rev-ship-commAmt2-orderCogs-refund;const placedGMV=parseFloat(viewOrder.placed_selling_price_gbp||rev);const unfulfilled=placedGMV-rev;
+      {viewOrder&&(()=>{const rev=parseFloat(viewOrder.selling_price_gbp)||0;const dispGMV=parseFloat(viewOrder.dispatched_gmv_gbp)||rev;const ship=parseFloat(viewOrder.shipping_cost_gbp)||0;const rrGMV=dispGMV-ship;const comm=parseFloat(viewOrder.commission_pct)||0;const commAmt2=rrGMV*comm/100;const nmv=rrGMV-commAmt2;const its=viewOrder.dispatch_items||[];const orderCogs=its.reduce((s,it)=>s+(it.dispatched_qty||it.quantity)*parseFloat(it.unit_cost_gbp),0);const refund=parseFloat(viewOrder.refund_amount_gbp||0);const net=nmv-refund-orderCogs;const placedGMV=parseFloat(viewOrder.placed_selling_price_gbp||rev);const unfulfilled=placedGMV-dispGMV;
       return<div>
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(130px, 1fr))',gap:12,marginBottom:20}}>
           {[{l:'Status',v:viewOrder.order_status,c:statusColor(viewOrder.order_status)},{l:'Channel',v:viewOrder.sales_channel_id?gn(salesChannels,viewOrder.sales_channel_id):'—'},{l:'Placed',v:viewOrder.placed_at?new Date(viewOrder.placed_at).toLocaleDateString('en-GB'):'—'},{l:'Payment',v:viewOrder.payment_status||'Pending'},{l:'Logged By',v:viewOrder.logged_by_name||'—'}].map((box,i)=><div key={i} style={{background:T.bg,borderRadius:8,padding:'10px 14px'}}><div style={{fontSize:11,color:T.textMuted,textTransform:'uppercase',marginBottom:4}}>{box.l}</div><div style={{fontWeight:600,color:box.c||T.text}}>{box.v}</div></div>)}
@@ -343,10 +348,13 @@ function OrdersTab({supabase,user,categories,brands,salesChannels,procurements,d
         <table style={{width:'100%',borderCollapse:'collapse',fontSize:13,marginBottom:16}}><thead><tr style={{borderBottom:`1px solid ${T.border}`}}>{['Item','Placed','Dispatched','Unit Cost','Total'].map(h=><th key={h} style={_th}>{h}</th>)}</tr></thead><tbody>{its.map((it,i)=><tr key={i} style={{borderBottom:`1px solid ${T.borderLight}`}}><td style={_td}>{gn(categories,it.category_id)} / {gn(brands,it.brand_id)}</td><td style={_td}>{it.placed_qty||it.quantity}</td><td style={_td}>{it.dispatched_qty!==null&&it.dispatched_qty!==undefined?it.dispatched_qty:'—'}</td><td style={{..._td,fontFamily:mono}}>{sym}{fmt((parseFloat(it.unit_cost_gbp)*rate))}</td><td style={{..._td,fontFamily:mono}}>{sym}{fmt(((it.dispatched_qty||it.quantity)*parseFloat(it.unit_cost_gbp)*rate))}</td></tr>)}</tbody></table>
         <h4 style={{fontSize:13,color:T.textSecondary,textTransform:'uppercase',letterSpacing:0.5,marginBottom:8}}>Financials</h4>
         <div style={{background:T.bg,borderRadius:10,padding:16,fontSize:14}}>
-          <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}><span>GMV</span><span style={{fontFamily:mono,fontWeight:600}}>{sym}{fmt((rev*rate))}</span></div>
+          <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}><span>Order GMV</span><span style={{fontFamily:mono,fontWeight:600}}>{sym}{fmt((rev*rate))}</span></div>
+          <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}><span>Dispatched GMV</span><span style={{fontFamily:mono,fontWeight:600}}>{sym}{fmt((dispGMV*rate))}</span></div>
           {unfulfilled>0&&<div style={{display:'flex',justifyContent:'space-between',marginBottom:6,color:T.amber}}><span>Unfulfilled GMV</span><span style={{fontFamily:mono}}>{sym}{fmt((unfulfilled*rate))}</span></div>}
           <div style={{display:'flex',justifyContent:'space-between',marginBottom:6,color:T.textSecondary}}><span>Shipping</span><span style={{fontFamily:mono}}>({sym}{fmt((ship*rate))})</span></div>
+          <div style={{borderTop:`1px solid ${T.border}`,paddingTop:6,marginTop:4,display:'flex',justifyContent:'space-between',marginBottom:6}}><span style={{fontWeight:600,color:T.accent}}>RR GMV</span><span style={{fontFamily:mono,fontWeight:600,color:T.accent}}>{sym}{fmt((rrGMV*rate))}</span></div>
           <div style={{display:'flex',justifyContent:'space-between',marginBottom:6,color:T.textSecondary}}><span>Commission ({comm}%)</span><span style={{fontFamily:mono}}>({sym}{fmt((commAmt2*rate))})</span></div>
+          <div style={{borderTop:`1px solid ${T.border}`,paddingTop:6,marginTop:4,display:'flex',justifyContent:'space-between',marginBottom:6}}><span style={{fontWeight:600,color:T.accent}}>NMV</span><span style={{fontFamily:mono,fontWeight:600,color:T.accent}}>{sym}{fmt((nmv*rate))}</span></div>
           <div style={{display:'flex',justifyContent:'space-between',marginBottom:6,color:T.textSecondary}}><span>COGS</span><span style={{fontFamily:mono}}>({sym}{fmt((orderCogs*rate))})</span></div>
           {refund>0&&<div style={{display:'flex',justifyContent:'space-between',marginBottom:6,color:T.red}}><span>Refund</span><span style={{fontFamily:mono}}>({sym}{fmt((refund*rate))})</span></div>}
           <div style={{borderTop:`2px solid ${T.border}`,paddingTop:8,marginTop:8,display:'flex',justifyContent:'space-between',fontWeight:700}}><span>Net P&L</span><span style={{fontFamily:mono,color:net>=0?T.green:T.red}}>{sym}{fmt((net*rate))}</span></div>
@@ -512,8 +520,8 @@ function FinanceTab({supabase,dispatches,expenses,salesChannels,categories,brand
   const dispatchedOrders=dispatches.filter(d=>d.order_status==='Dispatched');
   const periods=getBillingPeriods(dispatches,expenses);const [selP,setSelP]=useState(Math.max(0,periods.length-1));
   const period=periods[selP];const fDisp=period?dispatchedOrders.filter(d=>{const dt=new Date(d.dispatched_at);return dt>=period.start&&dt<=period.end;}):[];const fExp=period?(expenses||[]).filter(e=>{const dt=new Date(e.expense_date);return dt>=period.start&&dt<=period.end;}):[];
-  const gmv=fDisp.reduce((s,d)=>s+(parseFloat(d.selling_price_gbp)||0),0);const totalShipping=fDisp.reduce((s,d)=>s+(parseFloat(d.shipping_cost_gbp)||0),0);const totalCommission=fDisp.reduce((s,d)=>{const rev=parseFloat(d.selling_price_gbp)||0;const sh=parseFloat(d.shipping_cost_gbp)||0;const pct=parseFloat(d.commission_pct)||0;return s+Math.max(0,rev-sh)*pct/100;},0);
-  const nmv=gmv-totalShipping-totalCommission;
+  const gmv=fDisp.reduce((s,d)=>s+(parseFloat(d.dispatched_gmv_gbp)||parseFloat(d.selling_price_gbp)||0),0);const totalShipping=fDisp.reduce((s,d)=>s+(parseFloat(d.shipping_cost_gbp)||0),0);const rrGMV=gmv-totalShipping;const totalCommission=fDisp.reduce((s,d)=>{const dg=parseFloat(d.dispatched_gmv_gbp)||parseFloat(d.selling_price_gbp)||0;const sh=parseFloat(d.shipping_cost_gbp)||0;const pct=parseFloat(d.commission_pct)||0;return s+(dg-sh)*pct/100;},0);
+  const nmv=rrGMV-totalCommission;
   const totalRefunds=fDisp.reduce((s,d)=>s+(parseFloat(d.refund_amount_gbp)||0),0);const cogs=fDisp.reduce((s,d)=>s+(d.dispatch_items||[]).reduce((ss,it)=>ss+(it.dispatched_qty||it.quantity)*parseFloat(it.unit_cost_gbp),0),0);
   const directCostExp=fExp.filter(e=>e.category==='Direct Costs');const opexExp=fExp.filter(e=>e.category==='Opex');
   const totalDirect=directCostExp.reduce((s,e)=>s+parseFloat(e.amount_gbp),0);const totalOpex=opexExp.reduce((s,e)=>s+parseFloat(e.amount_gbp),0);
@@ -540,7 +548,7 @@ function FinanceTab({supabase,dispatches,expenses,salesChannels,categories,brand
       // Find all order blocks in the DETAIL section (not summary)
       const detailStart=allText.indexOf('Order Level Details');
       const detailText=detailStart>=0?allText.substring(detailStart):allText;
-      const orderPattern=/(\d{5,6}\/\d{2})/g;const allOrderNums=[...new Set([...detailText.matchAll(orderPattern)].map(m=>m[1]))];
+      const orderPattern=/(\d{5,6}\/\d{2,3})/g;const allOrderNums=[...new Set([...detailText.matchAll(orderPattern)].map(m=>m[1]))];
 
       // Parse each order by finding its specific block in the detail section
       const orders=[];
@@ -596,7 +604,8 @@ function FinanceTab({supabase,dispatches,expenses,salesChannels,categories,brand
     <div style={{marginBottom:24}}><select value={selP} onChange={e=>setSelP(parseInt(e.target.value))} style={sel}>{periods.map((p,i)=><option key={i} value={i}>{p.label}</option>)}</select></div>
 
     {view==='pnl'&&<div style={{...crd,padding:0,overflow:'hidden'}}><table style={{width:'100%',borderCollapse:'collapse',fontSize:14}}><thead><tr style={{borderBottom:`2px solid ${T.border}`}}><th style={{..._th,fontSize:13}}>Item</th><th style={{..._th,fontSize:13,textAlign:'right'}}>{currency}</th></tr></thead><tbody>
-      <Row label="GMV" val={gmv} bold/><Row label="Shipping" val={-totalShipping} indent/><Row label="Commission" val={-totalCommission} indent/>
+      <Row label="GMV" val={gmv} bold/><Row label="Shipping" val={-totalShipping} indent/>
+      <Row label="RR GMV" val={rrGMV} bold highlight={T.accent}/><Row label="Commission" val={-totalCommission} indent/>
       <Row label="NMV" val={nmv} bold highlight={T.accent}/><Row separator/>
       <Row label="Refunds" val={-totalRefunds} indent/>
       {Object.entries(directBySub).map(([k,v])=><Row key={k} label={k} val={-v} indent/>)}
@@ -607,31 +616,34 @@ function FinanceTab({supabase,dispatches,expenses,salesChannels,categories,brand
       <Row label="Net Profit" val={netProfit} bold highlight={netProfit>=0?T.green:T.red}/>
     </tbody></table></div>}
 
-    {view==='orders'&&<div style={{...crd,padding:0,overflow:'hidden'}}><div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}><thead><tr style={{borderBottom:`2px solid ${T.border}`}}>{['Date','Order ID','Channel','Items','GMV','Ship','Comm','Refund','COGS','Net P&L','Status'].map(h=><th key={h} style={{..._th,fontSize:10}}>{h}</th>)}</tr></thead><tbody>{fDisp.length>0?fDisp.map(d=>{
-      const rev=parseFloat(d.selling_price_gbp)||0;const ship=parseFloat(d.shipping_cost_gbp)||0;const comm=parseFloat(d.commission_pct)||0;const commA=Math.max(0,rev-ship)*comm/100;const refund=parseFloat(d.refund_amount_gbp||0);const orderCogs=(d.dispatch_items||[]).reduce((s2,it)=>s2+(it.dispatched_qty||it.quantity)*parseFloat(it.unit_cost_gbp),0);const net=rev-ship-commA-refund-orderCogs;const ps=d.payment_status||'Pending';const psCol=ps==='Paid'?T.green:ps==='Partial'?'#B8862D':T.textMuted;
+    {view==='orders'&&<div style={{...crd,padding:0,overflow:'hidden'}}><div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}><thead><tr style={{borderBottom:`2px solid ${T.border}`}}>{['Date','Order ID','Channel','Items','Disp GMV','Ship','RR GMV','Comm','Refund','COGS','Net P&L','Status'].map(h=><th key={h} style={{..._th,fontSize:10}}>{h}</th>)}</tr></thead><tbody>{fDisp.length>0?fDisp.map(d=>{
+      const dg=parseFloat(d.dispatched_gmv_gbp)||parseFloat(d.selling_price_gbp)||0;const ship=parseFloat(d.shipping_cost_gbp)||0;const rrG=dg-ship;const comm=parseFloat(d.commission_pct)||0;const commA=rrG*comm/100;const refund=parseFloat(d.refund_amount_gbp||0);const orderCogs=(d.dispatch_items||[]).reduce((s2,it)=>s2+(it.dispatched_qty||it.quantity)*parseFloat(it.unit_cost_gbp),0);const nmvO=rrG-commA;const net=nmvO-refund-orderCogs;const ps=d.payment_status||'Pending';const psCol=ps==='Paid'?T.green:ps==='Partial'?'#B8862D':T.textMuted;
       const itemDesc=(d.dispatch_items||[]).map(it=>`${gn(categories,it.category_id)}/${gn(brands,it.brand_id)} x${it.dispatched_qty||it.quantity}`).join(', ');
       return<tr key={d.id} style={{borderBottom:`1px solid ${T.borderLight}`}}>
         <td style={{..._td,color:T.textSecondary,fontSize:11}}>{new Date(d.dispatched_at).toLocaleDateString('en-GB')}</td>
         <td style={_td}><button type="button" onClick={()=>setViewOrder(d)} style={{background:'none',border:'none',color:T.accent,cursor:'pointer',fontFamily:mono,fontSize:11,padding:0,textDecoration:'underline',fontWeight:600}}>{d.order_id}</button></td>
         <td style={{..._td,fontSize:11}}>{d.sales_channel_id?gn(salesChannels,d.sales_channel_id):'—'}</td>
         <td style={{..._td,fontSize:10,color:T.textSecondary,maxWidth:150,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{itemDesc||'—'}</td>
-        <td style={{..._td,fontFamily:mono}}>{sym}{fmt((rev*rate))}</td>
+        <td style={{..._td,fontFamily:mono}}>{sym}{fmt((dg*rate))}</td>
         <td style={{..._td,fontFamily:mono,color:T.textSecondary}}>{ship>0?`(${sym}${fmt((ship*rate))})`:'—'}</td>
+        <td style={{..._td,fontFamily:mono,color:T.accent,fontWeight:600}}>{sym}{fmt((rrG*rate))}</td>
         <td style={{..._td,fontFamily:mono,color:T.textSecondary}}>({sym}{fmt((commA*rate))})</td>
         <td style={{..._td,fontFamily:mono,color:refund>0?T.red:T.textMuted}}>{refund>0?`(${sym}${fmt((refund*rate))})`:'—'}</td>
         <td style={{..._td,fontFamily:mono,color:T.textSecondary}}>({sym}{fmt((orderCogs*rate))})</td>
         <td style={{..._td,fontFamily:mono,fontWeight:600,color:net>=0?T.green:T.red}}>{sym}{fmt((net*rate))}</td>
         <td style={{..._td,fontSize:11,fontWeight:600,color:psCol}}>{ps}</td>
       </tr>;}):
-      <tr><td colSpan={11} style={{..._td,textAlign:'center',color:T.textMuted,padding:30}}>No dispatched orders in this period</td></tr>}
+      <tr><td colSpan={12} style={{..._td,textAlign:'center',color:T.textMuted,padding:30}}>No dispatched orders in this period</td></tr>}
     </tbody></table></div></div>}
 
     <Modal open={!!viewOrder} onClose={()=>setViewOrder(null)} title={viewOrder?`Order ${viewOrder.order_id}`:''}>
-      {viewOrder&&(()=>{const rev=parseFloat(viewOrder.selling_price_gbp)||0;const ship=parseFloat(viewOrder.shipping_cost_gbp)||0;const comm=parseFloat(viewOrder.commission_pct)||0;const cBase=Math.max(0,rev-ship);const cAmt=cBase*comm/100;const its=viewOrder.dispatch_items||[];const oCogs=its.reduce((s2,it)=>s2+(it.dispatched_qty||it.quantity)*parseFloat(it.unit_cost_gbp),0);const ref=parseFloat(viewOrder.refund_amount_gbp||0);const net=rev-ship-cAmt-oCogs-ref;return<div>
+      {viewOrder&&(()=>{const rev=parseFloat(viewOrder.selling_price_gbp)||0;const dg=parseFloat(viewOrder.dispatched_gmv_gbp)||rev;const ship=parseFloat(viewOrder.shipping_cost_gbp)||0;const rrG=dg-ship;const comm=parseFloat(viewOrder.commission_pct)||0;const cAmt=rrG*comm/100;const nmvO=rrG-cAmt;const its=viewOrder.dispatch_items||[];const oCogs=its.reduce((s2,it)=>s2+(it.dispatched_qty||it.quantity)*parseFloat(it.unit_cost_gbp),0);const ref=parseFloat(viewOrder.refund_amount_gbp||0);const net=nmvO-ref-oCogs;return<div>
         <div style={{background:T.bg,borderRadius:10,padding:16,fontSize:14}}>
-          <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}><span>GMV</span><span style={{fontFamily:mono,fontWeight:600}}>{sym}{fmt((rev*rate))}</span></div>
+          <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}><span>Dispatched GMV</span><span style={{fontFamily:mono,fontWeight:600}}>{sym}{fmt((dg*rate))}</span></div>
           <div style={{display:'flex',justifyContent:'space-between',marginBottom:6,color:T.textSecondary}}><span>Shipping</span><span style={{fontFamily:mono}}>({sym}{fmt((ship*rate))})</span></div>
+          <div style={{borderTop:`1px solid ${T.border}`,paddingTop:6,marginTop:4,display:'flex',justifyContent:'space-between',marginBottom:6}}><span style={{fontWeight:600,color:T.accent}}>RR GMV</span><span style={{fontFamily:mono,fontWeight:600,color:T.accent}}>{sym}{fmt((rrG*rate))}</span></div>
           <div style={{display:'flex',justifyContent:'space-between',marginBottom:6,color:T.textSecondary}}><span>Commission ({comm}%)</span><span style={{fontFamily:mono}}>({sym}{fmt((cAmt*rate))})</span></div>
+          <div style={{borderTop:`1px solid ${T.border}`,paddingTop:6,marginTop:4,display:'flex',justifyContent:'space-between',marginBottom:6}}><span style={{fontWeight:600,color:T.accent}}>NMV</span><span style={{fontFamily:mono,fontWeight:600,color:T.accent}}>{sym}{fmt((nmvO*rate))}</span></div>
           <div style={{display:'flex',justifyContent:'space-between',marginBottom:6,color:T.textSecondary}}><span>COGS</span><span style={{fontFamily:mono}}>({sym}{fmt((oCogs*rate))})</span></div>
           {ref>0&&<div style={{display:'flex',justifyContent:'space-between',marginBottom:6,color:T.red}}><span>Refund</span><span style={{fontFamily:mono}}>({sym}{fmt((ref*rate))})</span></div>}
           <div style={{borderTop:`2px solid ${T.border}`,paddingTop:8,marginTop:8,display:'flex',justifyContent:'space-between',fontWeight:700}}><span>Net P&L</span><span style={{fontFamily:mono,color:net>=0?T.green:T.red}}>{sym}{fmt((net*rate))}</span></div>
