@@ -84,7 +84,7 @@ export default function AppPage(){
   function dismissBanner(){setShowBanner(false);try{localStorage.setItem('rr-jummah-apr10','1');}catch{}}
   if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:T.bg,color:T.accent,fontFamily:"'Playfair Display', serif",fontSize:20}}>Loading...</div>;
 
-  const navItems=[{id:'dashboard',label:'Dashboard',icon:<IconDashboard/>},{id:'orders',label:'Orders',icon:<IconClip/>},{id:'inventory',label:'Inventory',icon:<IconBox/>},{id:'procurement',label:'Procurement',icon:<IconPackage/>},{id:'expenses',label:'Expenses',icon:<IconExpense/>},{id:'calculator',label:'Price Calc',icon:<IconCalc/>},{id:'finance',label:'Finance',icon:<IconChart/>},{id:'settings',label:'Settings',icon:<IconSettings/>}];
+  const navItems=[{id:'dashboard',label:'Dashboard',icon:<IconDashboard/>},{id:'orders',label:'Orders',icon:<IconClip/>},{id:'inventory',label:'Inventory',icon:<IconBox/>},{id:'procurement',label:'Procurement',icon:<IconPackage/>},{id:'expenses',label:'Expenses',icon:<IconExpense/>},{id:'calculator',label:'Price Calc',icon:<IconCalc/>},{id:'incentives',label:'Incentives',icon:<IconChart/>},{id:'finance',label:'Finance',icon:<IconChart/>},{id:'settings',label:'Settings',icon:<IconSettings/>}];
   const sp={supabase,user,categories,brands,qualities,suppliers,salesChannels,expenseSubcats,procurements,dispatches,expenses,settings,loadAll,rate,sym,currency,exchangeRates,isMobile};
 
   return(
@@ -106,7 +106,7 @@ export default function AppPage(){
         {isMobile&&<div style={{padding:'12px 16px',borderBottom:`1px solid ${T.border}`,display:'flex',alignItems:'center',gap:12}}><button onClick={()=>setSidebarOpen(true)} style={{background:'none',border:'none',cursor:'pointer',padding:4,color:T.accent}}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button><img src={LOGO_SRC} alt="RR" style={{width:28,height:28,borderRadius:6,objectFit:'cover'}}/><span style={{fontFamily:dsp,fontWeight:700,fontSize:15,color:T.accent}}>Retro Revival</span></div>}
         {showBanner&&<div style={{background:`linear-gradient(135deg, ${T.accent}, ${T.accentDark})`,color:'#fff',padding:'20px 24px',display:'flex',alignItems:'center',gap:12}}><div style={{flex:1,textAlign:'center'}}><div style={{fontWeight:700,fontSize:22,fontFamily:dsp,marginBottom:4}}>Jummah Mubarak Dost!</div><div style={{fontSize:13,opacity:0.9}}>May Allah bless your Friday and your hustle</div></div><button onClick={dismissBanner} style={{background:'rgba(255,255,255,0.2)',border:'none',color:'#fff',borderRadius:6,padding:'6px 12px',cursor:'pointer',fontWeight:600,fontFamily:'inherit',fontSize:12,flexShrink:0}}>x</button></div>}
         <div style={{maxWidth:1100,margin:'0 auto',padding:isMobile?'20px 16px':'32px 36px'}} className="fade-in" key={activeTab}>
-          {activeTab==='dashboard'&&<DashboardTab {...sp}/>}{activeTab==='orders'&&<OrdersTab {...sp}/>}{activeTab==='inventory'&&<InventoryTab {...sp}/>}{activeTab==='procurement'&&<ProcurementTab {...sp}/>}{activeTab==='expenses'&&<ExpensesTab {...sp}/>}{activeTab==='calculator'&&<PriceCalcTab {...sp}/>}{activeTab==='finance'&&<FinanceTab {...sp}/>}{activeTab==='settings'&&<SettingsTab {...sp}/>}
+          {activeTab==='dashboard'&&<DashboardTab {...sp}/>}{activeTab==='orders'&&<OrdersTab {...sp}/>}{activeTab==='inventory'&&<InventoryTab {...sp}/>}{activeTab==='procurement'&&<ProcurementTab {...sp}/>}{activeTab==='expenses'&&<ExpensesTab {...sp}/>}{activeTab==='calculator'&&<PriceCalcTab {...sp}/>}{activeTab==='incentives'&&<IncentiveTab/>}{activeTab==='finance'&&<FinanceTab {...sp}/>}{activeTab==='settings'&&<SettingsTab {...sp}/>}
         </div>
       </main>
     </div>
@@ -236,7 +236,9 @@ function OrdersTab({supabase,user,categories,brands,salesChannels,procurements,d
 
   async function saveEditOrder(){
     if(!editOrder)return;setSaving(true);
-    await supabase.from('dispatches').update({order_id:editOrder.order_id,selling_price_gbp:parseFloat(editOrder._sellPrice),dispatched_gmv_gbp:parseFloat(editOrder._dispGMV||editOrder._sellPrice),shipping_cost_gbp:parseFloat(editOrder._shipping||0),commission_pct:parseFloat(editOrder._commPct||0),sales_channel_id:editOrder._channelId||null,notes:editOrder._notes||null}).eq('id',editOrder.id);
+    const updates={order_id:editOrder.order_id,selling_price_gbp:parseFloat(editOrder._sellPrice),dispatched_gmv_gbp:parseFloat(editOrder._dispGMV||editOrder._sellPrice),shipping_cost_gbp:parseFloat(editOrder._shipping||0),commission_pct:parseFloat(editOrder._commPct||0),sales_channel_id:editOrder._channelId||null,notes:editOrder._notes||null};
+    if(editOrder._dispDate)updates.dispatched_at=new Date(editOrder._dispDate).toISOString();
+    await supabase.from('dispatches').update(updates).eq('id',editOrder.id);
     setEditOrder(null);await loadAll();setSaving(false);
   }
 
@@ -268,7 +270,7 @@ function OrdersTab({supabase,user,categories,brands,salesChannels,procurements,d
           <td style={{..._td,fontSize:11,color:T.textMuted,maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{d.notes||'—'}</td>
           <td style={_td}><div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
             {canAdvance&&<select onChange={e=>{if(e.target.value)advanceStatus(d,e.target.value);e.target.value='';}} defaultValue="" style={{background:T.accentBg,color:T.accent,border:`1px solid ${T.accentBorder}`,borderRadius:4,padding:'4px 8px',cursor:'pointer',fontSize:11,fontWeight:600,fontFamily:'inherit'}}><option value="" disabled>Move to...</option>{ORDER_STATUSES.slice(ORDER_STATUSES.indexOf(d.order_status)+1).map(s=><option key={s} value={s}>{s}</option>)}</select>}
-            {canEdit&&<button onClick={()=>setEditOrder({...d,_sellPrice:''+rev.toFixed(2),_dispGMV:''+((parseFloat(d.dispatched_gmv_gbp)||rev)).toFixed(2),_shipping:''+((parseFloat(d.shipping_cost_gbp)||0)).toFixed(2),_commPct:''+parseFloat(d.commission_pct||0),_channelId:d.sales_channel_id||'',_notes:d.notes||''})} style={{background:'none',border:'none',color:T.accent,cursor:'pointer',opacity:0.6,padding:4}}><IconEdit/></button>}
+            {canEdit&&<button onClick={()=>setEditOrder({...d,_sellPrice:''+rev.toFixed(2),_dispGMV:''+((parseFloat(d.dispatched_gmv_gbp)||rev)).toFixed(2),_shipping:''+((parseFloat(d.shipping_cost_gbp)||0)).toFixed(2),_commPct:''+parseFloat(d.commission_pct||0),_channelId:d.sales_channel_id||'',_notes:d.notes||'',_dispDate:d.dispatched_at?new Date(d.dispatched_at).toISOString().slice(0,10):''})} style={{background:'none',border:'none',color:T.accent,cursor:'pointer',opacity:0.6,padding:4}}><IconEdit/></button>}
             {canAdvance&&<button onClick={()=>cancelOrder(d)} style={{background:'none',border:'none',color:T.red,cursor:'pointer',opacity:0.5,padding:4,fontSize:10}}>Cancel</button>}
             <button onClick={()=>deleteOrder(d)} style={{background:'none',border:'none',color:T.red,cursor:'pointer',opacity:0.4,padding:4}}><IconTrash/></button>
           </div></td>
@@ -313,6 +315,7 @@ function OrdersTab({supabase,user,categories,brands,salesChannels,procurements,d
           <div><label style={lbl}>Shipping (£ GBP)</label><input type="number" step="0.01" value={editOrder._shipping} onChange={e=>setEditOrder({...editOrder,_shipping:e.target.value})} style={inp}/></div>
           <div><label style={lbl}>Commission %</label><input type="number" step="0.01" value={editOrder._commPct} onChange={e=>setEditOrder({...editOrder,_commPct:e.target.value})} style={inp}/></div>
           <div><label style={lbl}>Channel</label><select value={editOrder._channelId} onChange={e=>setEditOrder({...editOrder,_channelId:e.target.value})} style={sel}><option value="">None</option>{salesChannels.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+          <div><label style={lbl}>Dispatch Date</label><input type="date" value={editOrder._dispDate||''} onChange={e=>setEditOrder({...editOrder,_dispDate:e.target.value})} style={inp}/></div>
         </div>
         <div style={{marginBottom:16}}><label style={lbl}>Notes</label><input value={editOrder._notes} onChange={e=>setEditOrder({...editOrder,_notes:e.target.value})} style={inp}/></div>
         <button onClick={saveEditOrder} disabled={saving} style={btnP}>{saving?'Saving...':'Save Changes'}</button>
@@ -515,6 +518,55 @@ function PriceCalcTab({categories,brands,procurements,rate,sym}){
 }
 
 /* ===== FINANCE ===== */
+/* ===== INCENTIVE CALCULATOR ===== */
+function IncentiveTab(){
+  const [gmv,setGmv]=useState(15000);const [margin,setMargin]=useState(30);
+  const targetA=10000;const targetB=15000;const cap=250;
+  const bands=[{min:0,max:15,mult:0,label:'0% – 14.9%'},{min:15,max:20,mult:0.7,label:'15% – 19.9%'},{min:20,max:25,mult:0.8,label:'20% – 24.9%'},{min:25,max:30,mult:0.9,label:'25% – 29.9%'},{min:30,max:40,mult:1.0,label:'30% – 39.9%'},{min:40,max:100,mult:1.2,label:'40%+'}];
+  function calcPayout(g,target){const thresh=target*0.8;if(g<thresh)return 0;return(cap*0.5)+((g-thresh)/(target-thresh))*(cap*0.5);}
+  function getMult(m){for(let i=bands.length-1;i>=0;i--)if(m>=bands[i].min)return bands[i].mult;return 0;}
+  const mult=getMult(margin);const rawA=calcPayout(gmv,targetA);const rawB=calcPayout(gmv,targetB);
+  const payA=rawA*mult;const payB=rawB*mult;const total=payA+payB;
+  const gross=gmv*(margin/100);const net=gross-total;const eff=gmv>0?(net/gmv)*100:0;const costRatio=gross>0?(total/gross)*100:0;
+  const f=v=>'$'+Number(v).toLocaleString('en-US',{maximumFractionDigits:0});
+  const krd=(label,value,sub,accent)=>(<div style={{...crd,padding:'16px 18px',flex:'1 1 140px',minWidth:140,background:accent?T.accent:T.bgCard,border:accent?'none':`1px solid ${T.border}`}}><div style={{fontSize:11,fontWeight:500,textTransform:'uppercase',letterSpacing:0.5,marginBottom:6,color:accent?'rgba(255,255,255,0.75)':T.textSecondary}}>{label}</div><div style={{fontSize:22,fontWeight:700,fontFamily:dsp,color:accent?'#fff':T.text}}>{value}</div>{sub&&<div style={{fontSize:12,color:accent?'rgba(255,255,255,0.6)':T.textMuted,marginTop:4}}>{sub}</div>}</div>);
+  return(<div>
+    <h1 style={{fontFamily:dsp,fontSize:28,fontWeight:700,color:T.accent,margin:'0 0 6px'}}>Incentive Calculator</h1>
+    <p style={{color:T.textSecondary,fontSize:14,margin:'0 0 20px'}}>Hamza Asim &amp; Hamza Malka — cycle runs 8th to 7th, based on dispatched GMV</p>
+    <div style={{...crd,padding:24,marginBottom:24}}>
+      <h3 style={{fontFamily:dsp,fontSize:16,color:T.accent,margin:'0 0 16px'}}>Scenario Inputs</h3>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))',gap:16}}>
+        <div><label style={lbl}>Monthly Dispatched GMV</label><input type="number" value={gmv} onChange={e=>setGmv(Number(e.target.value)||0)} step="500" style={inp}/><div style={{fontSize:11,color:T.textMuted,marginTop:2}}>$ per cycle (8th–7th)</div></div>
+        <div><label style={lbl}>Gross Profit Margin</label><input type="number" value={margin} onChange={e=>setMargin(Number(e.target.value)||0)} step="0.5" style={inp}/><div style={{fontSize:11,color:T.textMuted,marginTop:2}}>%</div></div>
+        <div><label style={lbl}>Hamza Asim Target</label><div style={{...inp,background:T.bg,color:T.textSecondary}}>$10,000</div></div>
+        <div><label style={lbl}>Hamza Malka Target</label><div style={{...inp,background:T.bg,color:T.textSecondary}}>$15,000</div></div>
+        <div><label style={lbl}>Incentive Cap (each)</label><div style={{...inp,background:T.bg,color:T.textSecondary}}>$250</div></div>
+      </div>
+    </div>
+    <div style={{...crd,padding:0,overflow:'hidden',marginBottom:24}}>
+      <h3 style={{fontFamily:dsp,fontSize:16,color:T.accent,padding:'16px 20px 0',margin:0}}>Margin Multiplier Bands</h3>
+      <div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontSize:13,marginTop:8}}><thead><tr style={{borderBottom:`1px solid ${T.border}`}}>{['GP Margin Band','Multiplier','Active'].map(h=><th key={h} style={_th}>{h}</th>)}</tr></thead><tbody>{bands.map((b,i)=>{const active=margin>=b.min&&margin<b.max;return<tr key={i} style={{borderBottom:`1px solid ${T.borderLight}`,background:active?T.accentBg:'transparent'}}><td style={{..._td,fontWeight:500}}>{b.label}</td><td style={{..._td,fontWeight:600}}>{b.mult}×</td><td style={_td}>{active?<span style={{color:T.accent,fontWeight:600}}>{b.mult}×</span>:<span style={{color:T.textFaint}}>—</span>}</td></tr>;})}</tbody></table></div>
+    </div>
+    <h2 style={{fontFamily:dsp,fontSize:18,color:T.accent,margin:'0 0 12px'}}>Payouts</h2>
+    <div style={{display:'flex',flexWrap:'wrap',gap:10,marginBottom:24}}>
+      {krd('Hamza Asim',f(payA),'Raw: '+f(rawA)+' × '+mult)}
+      {krd('Hamza Malka',f(payB),'Raw: '+f(rawB)+' × '+mult)}
+      {krd('Total Cost',f(total),(costRatio>20?'⚠ ':'')+costRatio.toFixed(1)+'% of gross profit',true)}
+      {krd('Multiplier',mult+'×','at '+margin.toFixed(1)+'% GP margin')}
+    </div>
+    <h2 style={{fontFamily:dsp,fontSize:18,color:T.accent,margin:'0 0 12px'}}>Profitability</h2>
+    <div style={{display:'flex',flexWrap:'wrap',gap:10,marginBottom:32}}>
+      {krd('Gross Profit',f(gross))}
+      {krd('Net Profit',f(net),net<0?'Loss':'')}
+      {krd('Effective Margin',eff.toFixed(1)+'%',eff<0?'Negative':'')}
+    </div>
+    <div style={{borderTop:`1px solid ${T.border}`,paddingTop:20}}>
+      <h2 style={{fontFamily:dsp,fontSize:18,color:T.accent,margin:'0 0 14px'}}>How the Incentive Works</h2>
+      {[{t:'1. Incentive Cycle',d:'The cycle runs 8th to 7th. GMV is calculated on dispatched orders within this window. Both partners must be actively involved for the full cycle.'},{t:'2. Threshold Gate (80%)',d:'No incentive is paid until a partner reaches 80% of their target. This is a hard floor.'},{t:'3. Payout Calculation',d:'At 80% of target you earn half the cap. Each additional dollar earns the same per-dollar rate. At 100% you earn the full cap. At 120% you earn 1.5× the cap. Uncapped above 100%.'},{t:'4. Margin Multiplier',d:'The raw payout is multiplied by the gross profit margin band. Low-margin cycles generate lower payouts. Above 40% margin, a 1.2× bonus rewards high-margin performance.'},{t:'5. Independence',d:'Both partners are on separate schemes. They don\'t share a pool. Each has their own target, threshold, and payout.'},{t:'6. Profitability',d:'The calculator shows gross profit minus total incentive cost to give net profit and effective margin — what the business retains after paying both partners.'}].map((s,i)=><div key={i} style={{marginBottom:16}}><h3 style={{fontSize:13,fontWeight:600,color:T.text,marginBottom:4}}>{s.t}</h3><p style={{fontSize:13,color:T.textSecondary,lineHeight:1.65}}>{s.d}</p></div>)}
+    </div>
+  </div>);
+}
+
 function FinanceTab({supabase,dispatches,expenses,salesChannels,categories,brands,loadAll,rate,sym,currency}){
   const [view,setView]=useState('pnl');
   const dispatchedOrders=dispatches.filter(d=>d.order_status==='Dispatched');
